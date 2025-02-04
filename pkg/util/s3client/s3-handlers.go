@@ -23,6 +23,8 @@ import (
 	"strings"
 	"time"
 
+	"nutanix-cosi-driver/pkg/util/config"
+
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/awserr"
 	"github.com/aws/aws-sdk-go/aws/credentials"
@@ -31,23 +33,34 @@ import (
 	"k8s.io/klog/v2"
 )
 
+const (
+	defaultNutanixRegion = "us-east-1"
+
+	errNoSuchBucket = "NoSuchBucket"
+)
+
 // S3Agent wraps the s3.S3 structure to allow for wrapper methods
 type S3Agent struct {
 	Client *s3.S3
 }
 
-func NewS3Agent(accessKey, secretKey, endpoint string, debug bool) (*S3Agent, error) {
-	const nutanixRegion = "us-east-1"
+func NewS3Agent(cfg *config.Connection, debug bool) (*S3Agent, error) {
+	klog.InfoS("Creating S3 Client for driver", "driverId", cfg.Id)
+
+	if cfg.Region == "" {
+		cfg.Region = defaultNutanixRegion
+	}
 
 	logLevel := aws.LogOff
 	if debug {
 		logLevel = aws.LogDebug
 	}
+
 	sess, err := session.NewSession(
 		aws.NewConfig().
-			WithRegion(nutanixRegion).
-			WithCredentials(credentials.NewStaticCredentials(accessKey, secretKey, "")).
-			WithEndpoint(endpoint).
+			WithRegion(cfg.Region).
+			WithCredentials(credentials.NewStaticCredentials(cfg.ObjectStore.AccessKey, cfg.ObjectStore.SecretKey, "")).
+			WithEndpoint(cfg.ObjectStore.Endpoint).
 			WithS3ForcePathStyle(true).
 			WithMaxRetries(5).
 			WithDisableSSL(true).
@@ -57,12 +70,17 @@ func NewS3Agent(accessKey, secretKey, endpoint string, debug bool) (*S3Agent, er
 			WithLogLevel(logLevel),
 	)
 	if err != nil {
+		klog.ErrorS(err, "failed to create S3 Client session for driver", "driver", cfg.Id)
 		return nil, err
 	}
+
 	svc := s3.New(sess)
-	return &S3Agent{
+
+	S3Client := S3Agent{
 		Client: svc,
-	}, nil
+	}
+
+	return &S3Client, nil
 }
 
 // CreateBucket creates a bucket with the given name

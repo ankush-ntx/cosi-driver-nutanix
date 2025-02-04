@@ -1,0 +1,12 @@
+connections:
+- id: 
+  accountName: 
+  region: 
+  objectstore:
+    accessKey: 
+    secretKey: 
+    endpoint: 
+  prismCentral:
+    username: 
+    password: 
+    endpoint:

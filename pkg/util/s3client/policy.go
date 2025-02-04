@@ -83,6 +83,7 @@ var AllowedActions = []action{
 	ListBucket,
 	ListMultipartUploadParts,
 	PutObject,
+	PutLifecycleConfiguration,
 }
 
 type effect string

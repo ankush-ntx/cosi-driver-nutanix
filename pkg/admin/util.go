@@ -6,16 +6,25 @@ import (
 	"fmt"
 	"net"
 	"net/http"
-	"strings"
+	"net/url"
+
+	"nutanix-cosi-driver/pkg/util/config"
+
+	"k8s.io/klog/v2"
+	// "strings"
+)
+
+const (
+	defaultNutanixRegion = "us-east-1"
+	defaultAccountName   = "ntnx-cosi-iam-user"
 )
 
 var (
-	errNoEndpoint   = errors.New("Nutanix object store instance endpoint not set")
-	errNoAccessKey  = errors.New("Admin IAM access key for Nutanix Objects not set")
-	errNoSecretKey  = errors.New("Admin IAM secret key for Nutanix Objects not set")
-	errNoPCEndpoint = errors.New("Prism Central endpoint for IAM user management not set")
-	errNoPCUsername = errors.New("Prism Central username for IAM user management not set")
-	errNoPCPassword = errors.New("Prism Central password for IAM user management not set")
+	errNoEndpoint        = errors.New("Nutanix object store instance endpoint not set")
+	errNoPCEndpoint      = errors.New("Prism Central endpoint for IAM user management not set")
+	errInvalidPCEndpoint = errors.New("Prism Central endpoint for IAM user management is invalid")
+	errNoPCUsername      = errors.New("Prism Central username for IAM user management not set")
+	errNoPCPassword      = errors.New("Prism Central password for IAM user management not set")
 )
 
 // HTTPClient interface that conforms to that of the http package's Client.
@@ -25,51 +34,51 @@ type HTTPClient interface {
 
 // API struct for New Client
 type API struct {
-	AccessKey   string
-	SecretKey   string
 	Endpoint    string
 	PCEndpoint  string
 	PCUsername  string
 	PCPassword  string
+	Region      string
 	AccountName string
 	HTTPClient  HTTPClient
 }
 
 // New returns client for Nutanix object store
-func New(endpoint, accessKey, secretKey, pcEndpoint, pcUsername, pcPassword, accountName string, httpClient HTTPClient) (*API, error) {
+func New(cfg *config.Connection, httpClient HTTPClient) (*API, error) {
+	klog.InfoS("Creating IAM Client for driver", "driverId", cfg.Id)
+
 	// validate endpoint
-	if endpoint == "" {
+	if cfg.ObjectStore.Endpoint == "" {
 		return nil, errNoEndpoint
 	}
 
-	// validate access key
-	if accessKey == "" {
-		return nil, errNoAccessKey
-	}
-
-	// validate secret key
-	if secretKey == "" {
-		return nil, errNoSecretKey
-	}
-
 	// validate pc endpoint
-	if pcEndpoint == "" {
+	if cfg.PrismCentral.Endpoint == "" {
 		return nil, errNoPCEndpoint
+	}
+	err := ValidateEndpoint(cfg.PrismCentral.Endpoint)
+	if err != nil {
+		klog.ErrorS(err, "failed to validate to pc endpoint")
+		return nil, errInvalidPCEndpoint
 	}
 
 	// validate pc username
-	if pcUsername == "" {
+	if cfg.PrismCentral.Username == "" {
 		return nil, errNoPCUsername
 	}
 
 	// validate pc password
-	if pcPassword == "" {
+	if cfg.PrismCentral.Password == "" {
 		return nil, errNoPCPassword
 	}
 
 	// set default account_name when empty
-	if accountName == "" {
-		accountName = "ntnx-cosi-iam-user"
+	if cfg.AccountName == "" {
+		cfg.AccountName = defaultAccountName
+	}
+
+	if cfg.Region == "" {
+		cfg.Region = defaultNutanixRegion
 	}
 
 	// If no client is passed initialize it
@@ -81,33 +90,41 @@ func New(endpoint, accessKey, secretKey, pcEndpoint, pcUsername, pcPassword, acc
 		httpClient = &http.Client{Transport: tr}
 	}
 
-	return &API{
-		Endpoint:    endpoint,
-		AccessKey:   accessKey,
-		SecretKey:   secretKey,
-		PCEndpoint:  pcEndpoint,
-		PCUsername:  pcUsername,
-		PCPassword:  pcPassword,
-		AccountName: accountName,
+	IAMClient := API{
+		Endpoint:    cfg.ObjectStore.Endpoint,
+		PCEndpoint:  cfg.PrismCentral.Endpoint,
+		PCUsername:  cfg.PrismCentral.Username,
+		PCPassword:  cfg.PrismCentral.Password,
+		Region:      cfg.Region,
+		AccountName: cfg.AccountName,
 		HTTPClient:  httpClient,
-	}, nil
+	}
+
+	klog.InfoS("IAM Client created")
+
+	return &IAMClient, nil
 }
 
-func GetCredsFromPCSecret(key string) (string, string, string, error) {
-
-	// Split using ":" as delimiter
-	creds := strings.SplitN(string(key), ":", 4)
-	if len(creds) != 4 {
-		return "", "", "", fmt.Errorf("missing information in secret value '<prism-ip>:<prism-port>:<pc_user>:<pc_password>'")
-	}
-
-	// Validate Prism Endpoint
-	err := ValidateEndpoint(creds[0])
+func extractIP(rawURL string) (string, error) {
+	// Parse the URL
+	parsedURL, err := url.Parse(rawURL)
 	if err != nil {
-		return "", "", "", err
+		return "", fmt.Errorf("failed to parse URL: %v", err)
 	}
 
-	return "https://" + creds[0] + ":" + creds[1], creds[2], creds[3], nil
+	// Resolve the hostname to an IP address
+	host := parsedURL.Hostname()
+	ips, err := net.LookupIP(host)
+	if err != nil {
+		return "", fmt.Errorf("failed to resolve hostname to IP: %v", err)
+	}
+
+	// Return the first IP address
+	if len(ips) > 0 {
+		return ips[0].String(), nil
+	}
+
+	return "", fmt.Errorf("no IP addresses found for hostname: %s", host)
 }
 
 // Validate endpoint is of form <ip or hostname>:<port>
@@ -116,9 +133,14 @@ func ValidateEndpoint(endpoint string) error {
 		return fmt.Errorf("endpoint is not specified")
 	}
 
+	pcip, err := extractIP(endpoint)
+	if err != nil {
+		return fmt.Errorf("error while extracting IP from endpoint %s, err: %s", endpoint, err)
+	}
+
 	// epList[0] should be an IP v4 address
-	if _, err := net.ResolveIPAddr("ip", endpoint); err != nil {
-		return fmt.Errorf("error while resolving endpoint %s, err: %s", endpoint, err)
+	if _, err := net.ResolveIPAddr("ip", pcip); err != nil {
+		return fmt.Errorf("error while resolving IP %s, err: %s", pcip, err)
 	}
 
 	return nil

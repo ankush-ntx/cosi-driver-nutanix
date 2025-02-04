@@ -98,7 +98,7 @@ spec:
       containers:
       - args:
         - "--v={{ .Values.cosiController.logLevel }}"
-        image: "{{ .Values.cosiController.image.registry }}/{{ .Values.cosiController.image.repository }}:{{ .Values.cosiController.image.tag }}"
+        image: {{ include "cosi-driver-nutanix.controllerImageName" .}}
         imagePullPolicy: {{ .Values.cosiController.image.pullPolicy }}
         name: objectstorage-controller
       serviceAccountName: objectstorage-controller-sa

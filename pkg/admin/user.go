@@ -14,8 +14,8 @@ import (
 const (
 	marshalError   = "failed to marshal ntnx http request body"
 	unmarshalError = "failed to unmarshal ntnx http response"
-	createEndpoint = "/oss/iam_proxy/buckets_access_keys"
-	deleteEndpoint = "/oss/iam_proxy/users/"
+	userCreateEndpoint = "/oss/iam_proxy/buckets_access_keys"
+	userDeleteEndpoint = "/oss/iam_proxy/users/"
 )
 
 var (
@@ -68,7 +68,7 @@ func (api *API) CreateUser(ctx context.Context, username, display_name string) (
 	}
 
 	// Create API
-	url := api.PCEndpoint + createEndpoint
+	url := api.PCEndpoint + userCreateEndpoint
 
 	// Request Body
 	info := &NtnxUserReq{
@@ -141,7 +141,7 @@ func (api *API) RemoveUser(ctx context.Context, uuid string) error {
 	}
 
 	// Delete API
-	delete_url := api.PCEndpoint + deleteEndpoint + string(uuid)
+	delete_url := api.PCEndpoint + userDeleteEndpoint + string(uuid)
 	delete_request, err := http.NewRequest("DELETE", delete_url, nil)
 	if err != nil {
 		return fmt.Errorf("%w", err)

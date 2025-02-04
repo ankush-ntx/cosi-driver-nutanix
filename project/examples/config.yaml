@@ -1,0 +1,11 @@
+connections:
+- id: sample_driver
+  accountName: cosi
+  objectStore:
+    accessKey: kNBGSYNJMLDKF1wSTt2Cd10Iz_G1VlHt
+    secretKey: 36vuYDkY3R0MpLvzQEYPQKHQJegH0mDy
+    endpoint: http://10.51.142.33:80
+  prismCentral:
+    username: admin
+    password: Nutanix.123
+    endpoint: https://10.51.142.125:9440

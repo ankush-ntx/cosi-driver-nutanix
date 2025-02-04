@@ -27,33 +27,33 @@ spec:
       labels:
 {{ include "cosi-driver-nutanix.resource.labels" . | indent 8 }}
     spec:
+      imagePullSecrets: {{ .Values.provisioner.image.pullSecrets }}
       containers:
-      - envFrom:
-        - secretRef:
-            name: objectstorage-provisioner
-        image: "{{ .Values.image.registry }}/{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
-        imagePullPolicy: {{ .Values.image.pullPolicy }}
+      - image: {{ include "cosi-driver-nutanix.driverImageName" . }}
+        imagePullPolicy: {{ .Values.provisioner.image.pullPolicy }}
         name: cosi-driver-nutanix
         volumeMounts:
         - mountPath: /var/lib/cosi
           name: socket
+        - mountPath: /cosi
+          name: {{ include "cosi-driver-nutanix.configVolumeName" . }}
       - name: objectstorage-provisioner-sidecar
-        image: "{{ .Values.objectstorageProvisionerSidecar.image.registry }}/{{ .Values.objectstorageProvisionerSidecar.image.repository }}:{{ .Values.objectstorageProvisionerSidecar.image.tag }}"
+        image: {{ include "cosi-driver-nutanix.sidecarImageName" .}}
         imagePullPolicy: {{ .Values.objectstorageProvisionerSidecar.image.pullPolicy }}
         args:
           - "--v={{ .Values.objectstorageProvisionerSidecar.logLevel }}"
-        envFrom:
-          - secretRef:
-              name: objectstorage-provisioner
         env:
-          - name: POD_NAMESPACE
-            valueFrom:
-              fieldRef:
-                fieldPath: metadata.namespace
+        - name: POD_NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
         volumeMounts:
-          - mountPath: /var/lib/cosi
-            name: socket
+        - mountPath: /var/lib/cosi
+          name: socket
       serviceAccountName: objectstorage-provisioner-sa
       volumes:
-      - emptyDir: {}
-        name: socket
+      - name: socket
+        emptyDir: {}
+      - name: {{ include "cosi-driver-nutanix.configVolumeName" . }}
+        secret:
+          secretName: {{ include "cosi-driver-nutanix.configSecretName" . }}

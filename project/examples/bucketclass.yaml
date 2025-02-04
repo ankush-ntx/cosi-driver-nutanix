@@ -8,4 +8,4 @@ metadata:
 driverName: ntnx.objectstorage.k8s.io
 deletionPolicy: Delete
 parameters:
-  provisioner_data: "test_data"
+  id: sample_driver

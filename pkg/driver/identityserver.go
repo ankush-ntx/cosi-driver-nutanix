@@ -24,22 +24,32 @@ import (
 	"google.golang.org/grpc/status"
 	"k8s.io/klog/v2"
 
-	cosi "sigs.k8s.io/container-object-storage-interface-spec"
+	cosi "sigs.k8s.io/container-object-storage-interface/proto"
 )
 
 type IdentityServer struct {
-	provisioner string
+	Name string
+	cosi.UnimplementedIdentityServer
 }
 
+// Returns new identity server.
+func NewIdentityServer(provisioner string) *IdentityServer {
+	return &IdentityServer{
+		Name: provisioner,
+	}
+}
+
+// Returns name of server.
 func (id *IdentityServer) DriverGetInfo(ctx context.Context,
 	req *cosi.DriverGetInfoRequest) (*cosi.DriverGetInfoResponse, error) {
 
-	if id.provisioner == "" {
+	if id.Name == "" {
 		klog.ErrorS(fmt.Errorf("provisioner name cannot be empty"), "Invalid argument")
 		return nil, status.Error(codes.InvalidArgument, "Provisioner name is empty")
 	}
 
 	return &cosi.DriverGetInfoResponse{
-		Name: id.provisioner,
+		Name: id.Name,
 	}, nil
 }
+

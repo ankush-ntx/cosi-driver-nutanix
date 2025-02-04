@@ -5,4 +5,4 @@ metadata:
 driverName: ntnx.objectstorage.k8s.io
 authenticationType: KEY
 parameters:
-  provisioner_data: "test_data"
+  id: sample_driver

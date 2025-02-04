@@ -8,7 +8,7 @@ metadata:
   name: objectstorage-provisioner-role
 rules:
   - apiGroups: ["objectstorage.k8s.io"]
-    resources: ["buckets", "bucketaccesses","buckets/status", "bucketaccesses/status", "bucketaccessclasses", "bucketaccessclasses/status", "bucketclaims", "bucketclaims/status"]
+    resources: ["buckets", "bucketaccesses","buckets/status", "bucketaccesses/status", "bucketaccessclasses", "bucketaccessclasses/status", "bucketclaims", "bucketclaims/status", "bucketclasses", "bucketclasses/status"]
     verbs: ["get", "list", "watch", "update", "create", "delete"]
   - apiGroups: ["coordination.k8s.io"]
     resources: ["leases"]

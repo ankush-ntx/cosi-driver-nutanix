@@ -1,0 +1,14 @@
+apiVersion: objectstorage.k8s.io/v1alpha1
+kind: Bucket
+metadata:
+  name: cosi-test
+spec:
+  bucketClaim:
+    name: sample-bucketclaim
+  bucketClassName: sample-bucketclass
+  deletionPolicy: Delete
+  driverName: ntnx.objectstorage.k8s.io
+  existingBucketID: sample_driver:cosi-test
+  protocols:
+  - s3
+  parameters: {}

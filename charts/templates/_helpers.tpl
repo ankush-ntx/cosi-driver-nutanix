@@ -79,3 +79,42 @@ cosi.storage.k8s.io/authors: Nutanix Inc
 cosi.storage.k8s.io/license: Apache V2
 cosi.storage.k8s.io/support: https://github.com/kubernetes-sigs/container-object-storage-api
 {{- end }}
+
+{{/*
+Create the full name of driver image from repository and tag
+*/}}
+{{- define "cosi-driver-nutanix.driverImageName" }}
+  {{- .Values.provisioner.image.repository }}:{{ .Values.provisioner.image.tag | default .Chart.AppVersion }}
+{{- end }}
+
+{{/*
+Create the full name of sidecar image from repository and tag
+*/}}
+{{- define "cosi-driver-nutanix.sidecarImageName" }}
+  {{- .Values.objectstorageProvisionerSidecar.image.repository }}:{{ .Values.objectstorageProvisionerSidecar.image.tag | default .Chart.AppVersion }}
+{{- end }}
+
+{{/*
+Create the full name of controller image from repository and tag
+*/}}
+{{- define "cosi-driver-nutanix.controllerImageName" }}
+  {{- .Values.cosiController.image.repository }}:{{ .Values.cosiController.image.tag | default .Chart.AppVersion }}
+{{- end }}
+
+{{/*
+Create the secret name
+*/}}
+{{- define "cosi-driver-nutanix.configSecretName" }}
+  {{- if .Values.configuration.create }}
+    {{- default (printf "%s-config" (include "cosi-driver-nutanix.name" . )) .Values.configuration.secretName }}
+  {{- else }}
+    {{- .Values.configuration.secretName }}
+  {{- end }}
+{{- end }}
+
+{{/*
+Create the name for secret volume
+*/}}
+{{- define "cosi-driver-nutanix.configVolumeName" }}
+  {{- printf "%s-config" (include "cosi-driver-nutanix.name" . ) }}
+{{- end }}
