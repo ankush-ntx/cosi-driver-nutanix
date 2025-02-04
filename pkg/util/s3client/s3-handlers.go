@@ -120,9 +120,16 @@ func (s *S3Agent) DeleteBucket(name string) (bool, error) {
 		Bucket: aws.String(name),
 	})
 	if err != nil {
-		klog.ErrorS(err, "failed to delete bucket")
-		return false, err
-
+		if awsErr, ok := err.(awserr.Error); ok {
+			klog.Error("Error: ", awsErr.Error())
+			if awsErr.Code() == errNoSuchBucket {
+				return true, nil
+			}
+			return false, awsErr
+		} else {
+			klog.Error(err.Error())
+			return false, err
+		}
 	}
 	return true, nil
 }
