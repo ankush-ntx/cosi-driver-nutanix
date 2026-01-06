@@ -19,9 +19,9 @@ func TestPutBucketPolicy(t *testing.T) {
 		ps := s3client.PolicyStatement{
 			Sid:       "test-sid",
 			Effect:    "Allow",
-			Principal: map[string][]string{"AWS": {"user1", "user2"}},
-			Action:    []s3client.Action{s3client.ListBucket, s3client.GetObject},
-			Resource:  []string{"arn:aws:s3:::test-bucket"},
+			Principal: s3client.Principal{"AWS": {"user1", "user2"}},
+			Action:    s3client.ActionList{s3client.ListBucket, s3client.GetObject},
+			Resource:  s3client.StringOrArray{"arn:aws:s3:::test-bucket"},
 		}
 		policy := s3client.NewBucketPolicy(ps)
 
@@ -68,9 +68,9 @@ func TestGetBucketPolicy(t *testing.T) {
 		ps := s3client.PolicyStatement{
 			Sid:       "test-sid",
 			Effect:    "Allow",
-			Principal: map[string][]string{"AWS": {"userA"}},
-			Action:    []s3client.Action{s3client.GetBucketLocation},
-			Resource:  []string{"arn:aws:s3:::my-bucket"},
+			Principal: s3client.Principal{"AWS": {"userA"}},
+			Action:    s3client.ActionList{s3client.GetBucketLocation},
+			Resource:  s3client.StringOrArray{"arn:aws:s3:::my-bucket"},
 		}
 		policy := s3client.NewBucketPolicy(ps)
 		serialized, err := json.Marshal(policy)
@@ -116,6 +116,82 @@ func TestGetBucketPolicy(t *testing.T) {
 		assert.Error(t, err)
 		assert.Nil(t, policy)
 	})
+
+	// Test that policies with single string values (not arrays) are handled correctly
+	// This is the fix for: json: cannot unmarshal string into Go struct field PolicyStatement.Statement.Action of type []s3client.Action
+	t.Run("TestGetBucketPolicy_SingleStringValues", func(t *testing.T) {
+		// Simulate a policy returned from S3 where Action, Resource, and Principal are single strings
+		policyJSON := `{
+			"Version": "2012-10-17",
+			"Statement": [{
+				"Sid": "single-values",
+				"Effect": "Allow",
+				"Principal": {"AWS": "user1"},
+				"Action": "s3:GetObject",
+				"Resource": "arn:aws:s3:::my-bucket"
+			}]
+		}`
+
+		mockClient := &mocks.MockS3Client{
+			GetBucketPolicyFunc: func(input *s3.GetBucketPolicyInput) (*s3.GetBucketPolicyOutput, error) {
+				return &s3.GetBucketPolicyOutput{
+					Policy: aws.String(policyJSON),
+				}, nil
+			},
+		}
+		agent := &s3client.S3Agent{Client: mockClient}
+		retPolicy, err := agent.GetBucketPolicy("my-bucket")
+		require.NoError(t, err)
+		require.NotNil(t, retPolicy)
+		require.Len(t, retPolicy.Statement, 1)
+
+		stmt := retPolicy.Statement[0]
+		assert.Equal(t, "single-values", stmt.Sid)
+		assert.Equal(t, s3client.Effect("Allow"), stmt.Effect)
+
+		// Verify single string values were converted to slices
+		assert.Len(t, stmt.Action, 1)
+		assert.Equal(t, s3client.GetObject, stmt.Action[0])
+
+		assert.Len(t, stmt.Resource, 1)
+		assert.Equal(t, "arn:aws:s3:::my-bucket", stmt.Resource[0])
+
+		principals := stmt.Principal["AWS"]
+		assert.Len(t, principals, 1)
+		assert.Equal(t, "user1", principals[0])
+	})
+
+	t.Run("TestGetBucketPolicy_WildcardPrincipal", func(t *testing.T) {
+		// Test handling of wildcard principal "*"
+		policyJSON := `{
+			"Version": "2012-10-17",
+			"Statement": [{
+				"Sid": "wildcard-principal",
+				"Effect": "Allow",
+				"Principal": "*",
+				"Action": ["s3:GetObject"],
+				"Resource": ["arn:aws:s3:::public-bucket/*"]
+			}]
+		}`
+
+		mockClient := &mocks.MockS3Client{
+			GetBucketPolicyFunc: func(input *s3.GetBucketPolicyInput) (*s3.GetBucketPolicyOutput, error) {
+				return &s3.GetBucketPolicyOutput{
+					Policy: aws.String(policyJSON),
+				}, nil
+			},
+		}
+		agent := &s3client.S3Agent{Client: mockClient}
+		retPolicy, err := agent.GetBucketPolicy("public-bucket")
+		require.NoError(t, err)
+		require.NotNil(t, retPolicy)
+		require.Len(t, retPolicy.Statement, 1)
+
+		stmt := retPolicy.Statement[0]
+		principals := stmt.Principal["AWS"]
+		assert.Len(t, principals, 1)
+		assert.Equal(t, "*", principals[0])
+	})
 }
 
 func TestModifyBucketPolicy(t *testing.T) {
@@ -138,8 +214,10 @@ func TestModifyBucketPolicy(t *testing.T) {
 				assert.Equal(t, "Deny", string(ps.Effect))
 			case "sid2":
 				foundSID2 = true
+				assert.Equal(t, "Allow", string(ps.Effect))
 			case "sid3":
 				foundSID3 = true
+				assert.Equal(t, "Allow", string(ps.Effect))
 			}
 		}
 		assert.True(t, foundSID1 && foundSID2 && foundSID3)
@@ -166,7 +244,7 @@ func TestEjectPrincipals(t *testing.T) {
 		ps := s3client.PolicyStatement{
 			Sid:    "sid1",
 			Effect: "Allow",
-			Principal: map[string][]string{
+			Principal: s3client.Principal{
 				"AWS": {"user1", "user2", "user3"},
 			},
 		}
@@ -209,7 +287,7 @@ func TestPolicyStatementMethods(t *testing.T) {
 		ps.Allows()
 		assert.Equal(t, s3client.Effect("Allow"), ps.Effect)
 		ps.Effect = "Other"
-		ps.Allows()
+		ps.Allows() // Does not change ps.Effect if it is already set
 		assert.Equal(t, s3client.Effect("Other"), ps.Effect)
 	})
 

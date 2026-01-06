@@ -178,7 +178,7 @@ func (s *S3Agent) GetObjectInBucket(bucketname string, key string) (string, erro
 
 	if err != nil {
 		klog.ErrorS(err, "failed to retrieve object from bucket")
-		return "ERROR_ OBJECT NOT FOUND", err
+		return "", err
 
 	}
 	buf := new(bytes.Buffer)

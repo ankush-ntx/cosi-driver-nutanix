@@ -267,7 +267,7 @@ func TestGetObjectInBucket(t *testing.T) {
 		s := &s3client.S3Agent{Client: mock}
 		content, err := s.GetObjectInBucket("missing-bucket", "missing-key")
 		assert.Error(t, err)
-		assert.Equal(t, "ERROR_ OBJECT NOT FOUND", content)
+		assert.Empty(t, content)
 	})
 }
 

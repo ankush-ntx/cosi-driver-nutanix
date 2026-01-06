@@ -132,7 +132,7 @@ func CheckBucketStatusReady(ctx context.Context, bucketClient *bucketclientset.C
 			return err
 		}
 
-		if bucket.Status.BucketReady == false {
+		if !bucket.Status.BucketReady {
 			return fmt.Errorf("bucket is not ready.")
 		}
 
@@ -154,7 +154,7 @@ func CheckBucketStatusNotReady(ctx context.Context, bucketClient *bucketclientse
 			return err
 		}
 
-		if bucket.Status.BucketReady == true {
+		if bucket.Status.BucketReady {
 			return fmt.Errorf("bucket is ready.")
 		}
 

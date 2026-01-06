@@ -101,16 +101,18 @@ func (s *ProvisionerServer) DriverGrantBucketAccess(ctx context.Context,
 		}
 	}
 
-	// Format : {type: "external", email: <userName>@nutanix.com, displayname: <accountName>_<userName> (optional)}
+	// Format : {type: "external", username: <userName>@nutanix.com, displayname: <accountName>_<userName> (optional)}
 	user, err := s.NtnxIamClient.CreateUser(ctx, userName, displayName)
 	if err != nil {
 		klog.ErrorS(err, "failed to create an IAM user for Nutanix Objects")
-		return nil, err
+		return nil, status.Error(codes.Internal, "failed to create an IAM user")
 	}
+
+	accountId := user.Users[0].UUID
 
 	// Share bucket with the newly created IAM user
 	statement := s3cli.NewPolicyStatement().
-		WithSID(userName).
+		WithSID(accountId).
 		ForPrincipals(userName).
 		ForResources(bucketName).
 		ForSubResources(bucketName).
@@ -130,7 +132,7 @@ func (s *ProvisionerServer) DriverGrantBucketAccess(ctx context.Context,
 	klog.InfoS("Successfully granted access to user.", "userName", userName, "displayName", displayName, "bucketName", bucketName)
 
 	return &cosi.DriverGrantBucketAccessResponse{
-		AccountId:   user.Users[0].UUID,
+		AccountId:   accountId,
 		Credentials: fetchUserCredentials(user, s.NtnxIamClient.GetEndpoint()),
 	}, nil
 }
@@ -138,14 +140,34 @@ func (s *ProvisionerServer) DriverGrantBucketAccess(ctx context.Context,
 func (s *ProvisionerServer) DriverRevokeBucketAccess(ctx context.Context,
 	req *cosi.DriverRevokeBucketAccessRequest) (*cosi.DriverRevokeBucketAccessResponse, error) {
 
-	klog.InfoS("Deleting user", "id", req.GetAccountId())
+	klog.InfoS("Revoking bucket access", "accountId", req.GetAccountId(), "bucketId", req.GetBucketId())
 
-	err := s.NtnxIamClient.RemoveUser(ctx, req.GetAccountId())
+	policy, err := s.S3Client.GetBucketPolicy(req.GetBucketId())
 	if err != nil {
-		klog.ErrorS(err, "failed to delete user")
+		klog.ErrorS(err, "failed to get policy")
+		return nil, status.Error(codes.Internal, "failed to get policy")
+	}
+	if policy != nil {
+		klog.InfoS("Removing bucket policy statement", "accountId", req.GetAccountId())
+		policy = policy.DropPolicyStatements(req.GetAccountId())
+		if len(policy.Statement) > 0 {
+			_, err = s.S3Client.PutBucketPolicy(req.GetBucketId(), *policy)
+			if err != nil {
+				klog.ErrorS(err, "failed to set policy")
+				return nil, status.Error(codes.Internal, "failed to set policy")
+			}
+		}
 	}
 
-	klog.InfoS("Successfully revoked access of user", "userName", req.GetAccountId(), "bucketName", req.GetBucketId())
+	klog.InfoS("Deleting user", "id", req.GetAccountId())
+
+	err = s.NtnxIamClient.RemoveUser(ctx, req.GetAccountId())
+	if err != nil {
+		klog.ErrorS(err, "failed to delete user")
+		return nil, status.Error(codes.Internal, "failed to delete user")
+	}
+
+	klog.InfoS("Successfully revoked access of user", "id", req.GetAccountId(), "bucketName", req.GetBucketId())
 	return &cosi.DriverRevokeBucketAccessResponse{}, nil
 }
 

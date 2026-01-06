@@ -162,7 +162,8 @@ func (api *API) RemoveUser(ctx context.Context, uuid string) error {
 	// Check response status
 	if delete_resp.StatusCode == 404 {
 		return nil
-	} else if delete_resp.StatusCode != 204 {
+	}
+	if delete_resp.StatusCode != 204 {
 		return fmt.Errorf("non-204 response: %d - %s", delete_resp.StatusCode, string(decodedResponse))
 	}
 	return nil

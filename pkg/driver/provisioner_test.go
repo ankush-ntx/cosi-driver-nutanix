@@ -207,7 +207,7 @@ func TestDriverGrantBucketAccess(t *testing.T) {
 
 		_, err := server.DriverGrantBucketAccess(context.Background(), req)
 		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "iam error")
+		assert.Contains(t, err.Error(), "failed to create an IAM user")
 	})
 
 	t.Run("TestDriverGrantBucketAccess_GetPolicyError", func(t *testing.T) {
@@ -266,7 +266,23 @@ func TestDriverRevokeBucketAccess(t *testing.T) {
 				return nil
 			},
 		}
+		mockS3 := mocks.MockProvisionerS3{
+			GetBucketPolicyFunc: func(bucket string) (*s3cli.BucketPolicy, error) {
+				policy := s3cli.NewBucketPolicy(*s3cli.NewPolicyStatement().
+					WithSID("user-uuid").
+					ForPrincipals("user-uuid").
+					ForResources("bucket-test").
+					ForSubResources("bucket-test").
+					Allows().
+					Actions("s3:GetObject"))
+				return policy, nil
+			},
+			PutBucketPolicyFunc: func(bucket string, policy s3cli.BucketPolicy) (*s3.PutBucketPolicyOutput, error) {
+				return &s3.PutBucketPolicyOutput{}, nil
+			},
+		}	
 		server := &driver.ProvisionerServer{
+			S3Client: mockS3,
 			NtnxIamClient: mockIAM,
 		}
 		req := &cosi.DriverRevokeBucketAccessRequest{AccountId: "user-uuid"}
@@ -281,12 +297,125 @@ func TestDriverRevokeBucketAccess(t *testing.T) {
 				return errors.New("delete user failed")
 			},
 		}
+		mockS3 := mocks.MockProvisionerS3{
+			GetBucketPolicyFunc: func(bucket string) (*s3cli.BucketPolicy, error) {
+				policy := s3cli.NewBucketPolicy(*s3cli.NewPolicyStatement().
+					WithSID("user-uuid").
+					ForPrincipals("user-uuid").
+					ForResources("bucket-test").
+					ForSubResources("bucket-test").
+					Allows().
+					Actions("s3:GetObject"))
+				return policy, nil
+			},
+			PutBucketPolicyFunc: func(bucket string, policy s3cli.BucketPolicy) (*s3.PutBucketPolicyOutput, error) {
+				return &s3.PutBucketPolicyOutput{}, nil
+			},
+		}
 		server := &driver.ProvisionerServer{
+			S3Client: mockS3,
 			NtnxIamClient: mockIAM,
 		}
 		req := &cosi.DriverRevokeBucketAccessRequest{AccountId: "user-uuid"}
 		resp, err := server.DriverRevokeBucketAccess(context.Background(), req)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "failed to delete user")
+		assert.Nil(t, resp)
+	})
+
+	t.Run("TestDriverRevokeBucketAccess_GetPolicyError", func(t *testing.T) {
+		mockIAM := mocks.MockIAM{
+			RemoveUserFunc: func(ctx context.Context, uuid string) error {
+				return nil
+			},
+		}
+		mockS3 := mocks.MockProvisionerS3{
+			GetBucketPolicyFunc: func(bucket string) (*s3cli.BucketPolicy, error) {
+				return nil, awserr.New("UnknownError", "some s3 error", nil)
+			},
+		}
+		server := &driver.ProvisionerServer{
+			S3Client: mockS3,
+			NtnxIamClient: mockIAM,
+		}
+		req := &cosi.DriverRevokeBucketAccessRequest{AccountId: "user-uuid"}
+		resp, err := server.DriverRevokeBucketAccess(context.Background(), req)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "failed to get policy")
+		assert.Nil(t, resp)
+	})
+	
+	t.Run("TestDriverRevokeBucketAccess_PutPolicyError", func(t *testing.T) {
+		mockIAM := mocks.MockIAM{
+			RemoveUserFunc: func(ctx context.Context, uuid string) error {
+				return nil
+			},
+		}
+		mockS3 := mocks.MockProvisionerS3{
+			GetBucketPolicyFunc: func(bucket string) (*s3cli.BucketPolicy, error) {
+				statement1 := *s3cli.NewPolicyStatement().
+				WithSID("user-uuid-1").
+				ForPrincipals("user-uuid").
+				ForResources("bucket-test").
+				ForSubResources("bucket-test").
+				Allows().
+				Actions("s3:GetObject")
+
+				statement2 := *s3cli.NewPolicyStatement().
+				WithSID("user-uuid-2").
+				ForPrincipals("user-uuid").
+				ForResources("bucket-test").
+				ForSubResources("bucket-test").
+				Allows().
+				Actions("s3:GetObject")
+
+				policy := s3cli.NewBucketPolicy(statement1, statement2)
+				
+				return policy, nil
+			},
+			PutBucketPolicyFunc: func(bucket string, policy s3cli.BucketPolicy) (*s3.PutBucketPolicyOutput, error) {
+				return nil, fmt.Errorf("put policy failed")
+			},
+		}
+		server := &driver.ProvisionerServer{
+			S3Client: mockS3,
+			NtnxIamClient: mockIAM,
+		}
+		req := &cosi.DriverRevokeBucketAccessRequest{AccountId: "user-uuid-1"}
+		resp, err := server.DriverRevokeBucketAccess(context.Background(), req)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "failed to set policy")
+		assert.Nil(t, resp)
+	})
+
+	t.Run("TestDriverRevokeBucketAccess_UserNotFound", func(t *testing.T) {
+		mockIAM := mocks.MockIAM{
+			RemoveUserFunc: func(ctx context.Context, uuid string) error {
+				return nil
+			},
+		}
+		mockS3 := mocks.MockProvisionerS3{
+			GetBucketPolicyFunc: func(bucket string) (*s3cli.BucketPolicy, error) {
+				policy := s3cli.NewBucketPolicy(*s3cli.NewPolicyStatement().
+					WithSID("user-uuid").
+					ForPrincipals("user-uuid").
+					ForResources("bucket-test").
+					ForSubResources("bucket-test").
+					Allows().
+					Actions("s3:GetObject"))
+				return policy, nil
+			},
+			PutBucketPolicyFunc: func(bucket string, policy s3cli.BucketPolicy) (*s3.PutBucketPolicyOutput, error) {
+				return &s3.PutBucketPolicyOutput{}, nil
+			},
+		}
+		server := &driver.ProvisionerServer{
+			S3Client: mockS3,
+			NtnxIamClient: mockIAM,
+		}
+		req := &cosi.DriverRevokeBucketAccessRequest{AccountId: "fake-user-uuid"}
+		resp, err := server.DriverRevokeBucketAccess(context.Background(), req)
 		assert.NoError(t, err)
-		assert.NotNil(t, resp) // still returns response even on error
+		assert.NotNil(t, resp)
 	})
 }

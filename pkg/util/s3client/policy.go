@@ -16,13 +16,105 @@ limitations under the License.
 package s3client
 
 import (
+	"encoding/json"
 	"fmt"
 
 	"github.com/aws/aws-sdk-go/service/s3"
-	"k8s.io/apimachinery/pkg/util/json"
+	k8sjson "k8s.io/apimachinery/pkg/util/json"
 )
 
 type Action string
+
+// ActionList is a custom type that can unmarshal from both a string and an array
+// S3 policies can have Action as either "s3:GetObject" or ["s3:GetObject", "s3:PutObject"]
+type ActionList []Action
+
+func (a *ActionList) UnmarshalJSON(data []byte) error {
+	// Try to unmarshal as an array first
+	var actions []Action
+	if err := json.Unmarshal(data, &actions); err == nil {
+		*a = actions
+		return nil
+	}
+
+	// If that fails, try as a single string
+	var single Action
+	if err := json.Unmarshal(data, &single); err != nil {
+		return err
+	}
+	*a = []Action{single}
+	return nil
+}
+
+func (a ActionList) MarshalJSON() ([]byte, error) {
+	return json.Marshal([]Action(a))
+}
+
+// StringOrArray handles S3 policy fields that can be string or []string
+// Used for Resource field which can be "arn:..." or ["arn:...", "arn:..."]
+type StringOrArray []string
+
+func (s *StringOrArray) UnmarshalJSON(data []byte) error {
+	var arr []string
+	if err := json.Unmarshal(data, &arr); err == nil {
+		*s = arr
+		return nil
+	}
+
+	var single string
+	if err := json.Unmarshal(data, &single); err != nil {
+		return err
+	}
+	*s = []string{single}
+	return nil
+}
+
+func (s StringOrArray) MarshalJSON() ([]byte, error) {
+	return json.Marshal([]string(s))
+}
+
+// Principal handles AWS Principal which can be:
+// - "*" (string for public access)
+// - {"AWS": "arn:..."} (single principal)
+// - {"AWS": ["arn:...", "arn:..."]} (multiple principals)
+type Principal map[string]StringOrArray
+
+func (p *Principal) UnmarshalJSON(data []byte) error {
+	// Try as a string first (e.g., "*")
+	var str string
+	if err := json.Unmarshal(data, &str); err == nil {
+		*p = Principal{"AWS": StringOrArray{str}}
+		return nil
+	}
+
+	// Try as map with string values
+	var mapStr map[string]string
+	if err := json.Unmarshal(data, &mapStr); err == nil {
+		result := make(Principal)
+		for k, v := range mapStr {
+			result[k] = StringOrArray{v}
+		}
+		*p = result
+		return nil
+	}
+
+	// Try as map with array values
+	var mapArr map[string][]string
+	if err := json.Unmarshal(data, &mapArr); err == nil {
+		result := make(Principal)
+		for k, v := range mapArr {
+			result[k] = StringOrArray(v)
+		}
+		*p = result
+		return nil
+	}
+
+	return fmt.Errorf("cannot unmarshal Principal from: %s", string(data))
+}
+
+func (p Principal) MarshalJSON() ([]byte, error) {
+	return json.Marshal(map[string]StringOrArray(p))
+}
 
 const (
 	All                            Action = "s3:*"
@@ -104,12 +196,12 @@ type PolicyStatement struct {
 	Effect Effect `json:"Effect"`
 	// Principle is/are the nutanix user names affected by this PolicyStatement
 	// Must be in the format of '<username>'
-	Principal map[string][]string `json:"Principal"`
+	Principal Principal `json:"Principal"`
 	// Action is a list of s3:* actions
-	Action []Action `json:"Action"`
+	Action ActionList `json:"Action"`
 	// Resource is the ARN identifier for the S3 resource (bucket)
 	// Must be in the format of 'arn:aws:s3:::<bucket>'
-	Resource []string `json:"Resource"`
+	Resource StringOrArray `json:"Resource"`
 }
 
 // BucketPolicy represents set of policy statements for a single bucket.
@@ -139,7 +231,7 @@ func NewBucketPolicy(ps ...PolicyStatement) *BucketPolicy {
 func (s *S3Agent) PutBucketPolicy(bucket string, policy BucketPolicy) (*s3.PutBucketPolicyOutput, error) {
 
 	confirmRemoveSelfBucketAccess := false
-	serializedPolicy, _ := json.Marshal(policy)
+	serializedPolicy, _ := k8sjson.Marshal(policy)
 	consumablePolicy := string(serializedPolicy)
 
 	p := &s3.PutBucketPolicyInput{
@@ -163,7 +255,7 @@ func (s *S3Agent) GetBucketPolicy(bucket string) (*BucketPolicy, error) {
 	}
 
 	policy := &BucketPolicy{}
-	err = json.Unmarshal([]byte(*out.Policy), policy)
+	err = k8sjson.Unmarshal([]byte(*out.Policy), policy)
 	if err != nil {
 		return nil, err
 	}
@@ -217,9 +309,9 @@ func NewPolicyStatement() *PolicyStatement {
 	return &PolicyStatement{
 		Sid:       "",
 		Effect:    "",
-		Principal: map[string][]string{},
-		Action:    []Action{},
-		Resource:  []string{},
+		Principal: Principal{},
+		Action:    ActionList{},
+		Resource:  StringOrArray{},
 	}
 }
 
@@ -233,11 +325,11 @@ const arnPrefixResource = "arn:aws:s3:::%s"
 
 // ForPrincipals adds users to the PolicyStatement
 func (ps *PolicyStatement) ForPrincipals(users ...string) *PolicyStatement {
-	principals := ps.Principal[awsPrinciple]
+	principals := []string(ps.Principal[awsPrinciple])
 	for _, u := range users {
 		principals = append(principals, u)
 	}
-	ps.Principal[awsPrinciple] = principals
+	ps.Principal[awsPrinciple] = StringOrArray(principals)
 	return ps
 }
 
@@ -275,7 +367,7 @@ func (ps *PolicyStatement) Actions(actions ...Action) *PolicyStatement {
 }
 
 func (ps *PolicyStatement) EjectPrincipals(users ...string) {
-	principals := ps.Principal[awsPrinciple]
+	principals := []string(ps.Principal[awsPrinciple])
 	for _, u := range users {
 		for j, v := range principals {
 			if u == v {
@@ -283,5 +375,5 @@ func (ps *PolicyStatement) EjectPrincipals(users ...string) {
 			}
 		}
 	}
-	ps.Principal[awsPrinciple] = principals
+	ps.Principal[awsPrinciple] = StringOrArray(principals)
 }

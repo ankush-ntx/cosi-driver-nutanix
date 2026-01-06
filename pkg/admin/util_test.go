@@ -161,13 +161,13 @@ func TestGetAccountName(t *testing.T) {
 		api := admin.API{
 			AccountName: "test",
 		}
-		accountName := api.AccountName
+		accountName := api.GetAccountName()
 		assert.Equal(t, "test", accountName)
 	})
 
 	t.Run("TestGetAccountName_MissingAccountName", func(t *testing.T) {
 		api := admin.API{}
-		accountName := api.AccountName
+		accountName := api.GetAccountName()
 		assert.Empty(t, accountName)
 	})
 }

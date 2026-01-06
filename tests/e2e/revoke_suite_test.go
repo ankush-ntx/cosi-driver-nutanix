@@ -10,7 +10,6 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
-	"github.com/aws/aws-sdk-go/service/s3"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/container-object-storage-interface-api/apis/objectstorage/v1alpha1"
 )
@@ -249,7 +248,7 @@ var _ = Describe("Revoke Bucket Access", func() {
 			Expect(err).ToNot(HaveOccurred())
 
 			// By("Checking if Bucket is created in the Objectstore backend")
-			err = s3Client.WaitUntilBucketExists(&s3.HeadBucketInput{Bucket: &failBucket.Name})
+			// err = s3Client.WaitUntilBucketExists(&s3.HeadBucketInput{Bucket: &failBucket.Name})
 			err = helpers.CheckBucketExistenceInObjectstore(ctx, s3Client, failBucket.Name)
 			Expect(err).ToNot(HaveOccurred())
 
