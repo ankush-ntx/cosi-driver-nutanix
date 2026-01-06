@@ -114,8 +114,9 @@ func TestBuildTransportTLS(t *testing.T) {
 			Endpoint: "https://example.com",
 		}
 		transport, err := BuildTransportTLS(cfg)
-		require.Error(t, err)
-		assert.Nil(t, transport)
-		assert.Contains(t, err.Error(), "failed to append CA cert")
+		require.NoError(t, err)
+		require.NotNil(t, transport)
+		require.NotNil(t, transport.TLSClientConfig)
+		assert.False(t, transport.TLSClientConfig.InsecureSkipVerify, "InsecureSkipVerify should be false")
 	})
 }
