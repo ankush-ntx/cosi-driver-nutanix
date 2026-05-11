@@ -4,8 +4,10 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
+	"strings"
 	"testing"
 
 	"github.com/nutanix-core/k8s-ntnx-object-cosi/pkg/admin"
@@ -153,6 +155,170 @@ func TestCreateUser(t *testing.T) {
 		_, err := api.CreateUser(ctx, mockUsername, mockDisplayName)
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "unmarshal")
+	})
+
+	// The IAM proxy returns this exact phrase in the error payload when an
+	// external user with the requested username already exists. CreateUser
+	// is expected to recover by fetching the existing user and minting a
+	// new access key for them, returning a successful NutanixUserResp.
+	createUserExistsBody := `{
+		"users": [{
+			"buckets_access_keys": null,
+			"code": 1009,
+			"message": "User and associated access key already exist for username: testuser",
+			"type": "external",
+			"username": "testuser"
+		}]
+	}`
+
+	listUsersBody := `{
+		"users": [
+			{
+				"username": "someoneelse",
+				"uuid": "other-uuid",
+				"type": "external"
+			},
+			{
+				"username": "testuser",
+				"uuid": "existing-user-uuid",
+				"type": "external"
+			}
+		]
+	}`
+
+	newAccessKeyBody := `{
+		"access_key_id": "new-access-key",
+		"access_key_name": "buckets-access-key-fallback",
+		"created_time": "2026-05-06T08:48:19Z",
+		"secret_access_key": "new-secret-key"
+	}`
+
+	t.Run("TestCreateUser_AlreadyExists_FallbackSuccess", func(t *testing.T) {
+		var sawListUsers, sawCreateAccessKey bool
+		mockClient := mocks.MockHTTPClient{
+			DoFunc: func(req *http.Request) (*http.Response, error) {
+				switch {
+				case req.Method == "POST" && strings.HasSuffix(req.URL.Path, "/oss/iam_proxy/buckets_access_keys"):
+					return &http.Response{
+						StatusCode: 200,
+						Body:       io.NopCloser(bytes.NewBufferString(createUserExistsBody)),
+					}, nil
+				case req.Method == "GET" && strings.HasSuffix(req.URL.Path, "/oss/iam_proxy/users"):
+					sawListUsers = true
+					return &http.Response{
+						StatusCode: 200,
+						Body:       io.NopCloser(bytes.NewBufferString(listUsersBody)),
+					}, nil
+				case req.Method == "POST" && req.URL.Path == "/oss/iam_proxy/users/existing-user-uuid/buckets_access_keys":
+					sawCreateAccessKey = true
+					return &http.Response{
+						StatusCode: 200,
+						Body:       io.NopCloser(bytes.NewBufferString(newAccessKeyBody)),
+					}, nil
+				}
+				return nil, fmt.Errorf("unexpected request: %s %s", req.Method, req.URL.Path)
+			},
+		}
+
+		api := baseApi
+		api.HTTPClient = mockClient
+
+		resp, err := api.CreateUser(ctx, mockUsername, mockDisplayName)
+		assert.NoError(t, err)
+		assert.True(t, sawListUsers, "list users endpoint should have been called")
+		assert.True(t, sawCreateAccessKey, "create access key endpoint should have been called")
+		assert.Equal(t, "testuser", resp.Users[0].Username)
+		assert.Equal(t, "existing-user-uuid", resp.Users[0].UUID)
+		assert.Equal(t, "new-access-key", resp.Users[0].BucketsAccessKeys[0].AccessKeyID)
+		assert.Equal(t, "new-secret-key", resp.Users[0].BucketsAccessKeys[0].SecretAccessKey)
+	})
+
+	t.Run("TestCreateUser_AlreadyExists_UserNotInList", func(t *testing.T) {
+		emptyListBody := `{ "users": [ { "username": "someoneelse", "uuid": "other-uuid" } ] }`
+
+		mockClient := mocks.MockHTTPClient{
+			DoFunc: func(req *http.Request) (*http.Response, error) {
+				switch {
+				case req.Method == "POST" && strings.HasSuffix(req.URL.Path, "/oss/iam_proxy/buckets_access_keys"):
+					return &http.Response{
+						StatusCode: 200,
+						Body:       io.NopCloser(bytes.NewBufferString(createUserExistsBody)),
+					}, nil
+				case req.Method == "GET" && strings.HasSuffix(req.URL.Path, "/oss/iam_proxy/users"):
+					return &http.Response{
+						StatusCode: 200,
+						Body:       io.NopCloser(bytes.NewBufferString(emptyListBody)),
+					}, nil
+				}
+				return nil, fmt.Errorf("unexpected request: %s %s", req.Method, req.URL.Path)
+			},
+		}
+
+		api := baseApi
+		api.HTTPClient = mockClient
+
+		_, err := api.CreateUser(ctx, mockUsername, mockDisplayName)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "not found in user list")
+	})
+
+	t.Run("TestCreateUser_AlreadyExists_ListUsersFails", func(t *testing.T) {
+		mockClient := mocks.MockHTTPClient{
+			DoFunc: func(req *http.Request) (*http.Response, error) {
+				switch {
+				case req.Method == "POST" && strings.HasSuffix(req.URL.Path, "/oss/iam_proxy/buckets_access_keys"):
+					return &http.Response{
+						StatusCode: 200,
+						Body:       io.NopCloser(bytes.NewBufferString(createUserExistsBody)),
+					}, nil
+				case req.Method == "GET" && strings.HasSuffix(req.URL.Path, "/oss/iam_proxy/users"):
+					return &http.Response{
+						StatusCode: 500,
+						Body:       io.NopCloser(bytes.NewBufferString(`{"error":"boom"}`)),
+					}, nil
+				}
+				return nil, fmt.Errorf("unexpected request: %s %s", req.Method, req.URL.Path)
+			},
+		}
+
+		api := baseApi
+		api.HTTPClient = mockClient
+
+		_, err := api.CreateUser(ctx, mockUsername, mockDisplayName)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "failed to list existing users")
+	})
+
+	t.Run("TestCreateUser_AlreadyExists_AccessKeyCreateFails", func(t *testing.T) {
+		mockClient := mocks.MockHTTPClient{
+			DoFunc: func(req *http.Request) (*http.Response, error) {
+				switch {
+				case req.Method == "POST" && strings.HasSuffix(req.URL.Path, "/oss/iam_proxy/buckets_access_keys"):
+					return &http.Response{
+						StatusCode: 200,
+						Body:       io.NopCloser(bytes.NewBufferString(createUserExistsBody)),
+					}, nil
+				case req.Method == "GET" && strings.HasSuffix(req.URL.Path, "/oss/iam_proxy/users"):
+					return &http.Response{
+						StatusCode: 200,
+						Body:       io.NopCloser(bytes.NewBufferString(listUsersBody)),
+					}, nil
+				case req.Method == "POST" && req.URL.Path == "/oss/iam_proxy/users/existing-user-uuid/buckets_access_keys":
+					return &http.Response{
+						StatusCode: 500,
+						Body:       io.NopCloser(bytes.NewBufferString(`{"error":"server error"}`)),
+					}, nil
+				}
+				return nil, fmt.Errorf("unexpected request: %s %s", req.Method, req.URL.Path)
+			},
+		}
+
+		api := baseApi
+		api.HTTPClient = mockClient
+
+		_, err := api.CreateUser(ctx, mockUsername, mockDisplayName)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "failed to create access key for existing user")
 	})
 
 }
