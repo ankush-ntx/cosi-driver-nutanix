@@ -136,7 +136,7 @@ func (api *API) CreateUser(ctx context.Context, username, display_name string) (
 		return result, fmt.Errorf("%w", err)
 	}
 
-	// Check respsonse status
+	// Check response status
 	if resp.StatusCode != 200 {
 		return result, fmt.Errorf("non-200 response: %d - %s", resp.StatusCode, string(decodedResponse))
 	}

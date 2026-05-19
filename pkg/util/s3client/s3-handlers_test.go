@@ -49,7 +49,7 @@ func TestNewS3Agent(t *testing.T) {
 	t.Run("TestNewS3Agent_ValidSecureConnection", func(t *testing.T) {
 		// Insecure false and endpoint starting with "https" should succeed with a valid PEM CA certificate.
 		endpoint := "https://127.0.0.1:9440"
-		agent, err := s3client.NewS3Agent(accessKey, secretKey, endpoint, validPEMCert, false, false)
+		agent, err := s3client.NewS3Agent(accessKey, secretKey, endpoint, validPEMCert, false /* insecure */, false /* debug */)
 		require.NoError(t, err)
 		require.NotNil(t, agent)
 		require.NotNil(t, agent.Client)
@@ -72,7 +72,7 @@ func TestNewS3Agent(t *testing.T) {
 	t.Run("TestNewS3Agent_ValidInsecureConnection", func(t *testing.T) {
 		// When insecure is true, even if the endpoint starts with "http", it should succeed.
 		endpoint := "http://127.0.0.1:9440"
-		agent, err := s3client.NewS3Agent(accessKey, secretKey, endpoint, validPEMCert, true, false)
+		agent, err := s3client.NewS3Agent(accessKey, secretKey, endpoint, validPEMCert, true /* insecure */, false /* debug */)
 		require.NoError(t, err)
 		require.NotNil(t, agent)
 		require.NotNil(t, agent.Client)
@@ -95,7 +95,7 @@ func TestNewS3Agent(t *testing.T) {
 	t.Run("TestNewS3Agent_ErrorSecureWithHttpEndpoint", func(t *testing.T) {
 		// When insecure is false but the endpoint starts with "http", it should return an error.
 		endpoint := "http://127.0.0.1:9440"
-		agent, err := s3client.NewS3Agent(accessKey, secretKey, endpoint, validPEMCert, false, false)
+		agent, err := s3client.NewS3Agent(accessKey, secretKey, endpoint, validPEMCert, false /* insecure */, false /* debug */)
 		require.Error(t, err)
 		assert.Nil(t, agent)
 		assert.Contains(t, err.Error(), "'http' endpoint cannot be secure")
@@ -105,7 +105,7 @@ func TestNewS3Agent(t *testing.T) {
 		// Provide an invalid CA cert string that is not a valid PEM or base64 string.
 		endpoint := "https://127.0.0.1:9440"
 		invalidCACert := "not-base64"
-		agent, err := s3client.NewS3Agent(accessKey, secretKey, endpoint, invalidCACert, false, false)
+		agent, err := s3client.NewS3Agent(accessKey, secretKey, endpoint, invalidCACert, false /* insecure */, false /* debug */)
 		require.Error(t, err)
 		assert.Nil(t, agent)
 		// The error should come from transport.BuildTransportTLS. We expect an error related to decoding the CA cert.
@@ -117,7 +117,7 @@ func TestNewS3Agent(t *testing.T) {
 		// While we cannot easily inspect the AWS config from the created session,
 		// we can at least verify that the agent creation does not error.
 		endpoint := "https://127.0.0.1:9440"
-		agent, err := s3client.NewS3Agent(accessKey, secretKey, endpoint, validPEMCert, false, true)
+		agent, err := s3client.NewS3Agent(accessKey, secretKey, endpoint, validPEMCert, false /* insecure */, true /* debug */)
 		require.NoError(t, err)
 		require.NotNil(t, agent)
 	})
