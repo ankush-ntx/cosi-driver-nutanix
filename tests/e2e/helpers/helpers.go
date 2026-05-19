@@ -19,32 +19,28 @@ import (
 	. "github.com/onsi/gomega"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/util/retry"
 	cosiapi "sigs.k8s.io/container-object-storage-interface-api/apis"
 	"sigs.k8s.io/container-object-storage-interface-api/apis/objectstorage/v1alpha1"
 	bucketclientset "sigs.k8s.io/container-object-storage-interface-api/client/clientset/versioned"
 )
 
-const (
-	_attempts = 30
-	sleep     = 2 * time.Second
-)
-
-func retry(ctx context.Context, f func() error) (err error) {
-	for i := 0; i < _attempts; i++ {
-		if i > 0 {
-			time.Sleep(sleep)
-		}
-		err = f()
-		if err == nil {
-			return nil
-		}
-	}
-	return err
+// retryBackoff preserves the original behavior of up to 30 attempts with a
+// fixed 2-second wait between attempts.
+var retryBackoff = wait.Backoff{
+	Steps:    30,
+	Duration: 2 * time.Second,
+	Factor:   1.0,
 }
 
+// alwaysRetry treats every error as transient, matching the previous helper
+// which retried on any non-nil error.
+func alwaysRetry(error) bool { return true }
+
 func VerifyObjectstore(ctx context.Context, ossEndpoint string, s3Client *s3.S3) error {
-	err := retry(ctx, func() error {
+	err := retry.OnError(retryBackoff, alwaysRetry, func() error {
 		var err error
 
 		_, err = http.Get(ossEndpoint)
@@ -53,7 +49,7 @@ func VerifyObjectstore(ctx context.Context, ossEndpoint string, s3Client *s3.S3)
 		}
 		_, err = s3Client.ListBuckets(&s3.ListBucketsInput{})
 		if err != nil {
-			return nil
+			return err
 		}
 
 		return nil
@@ -66,7 +62,7 @@ func VerifyObjectstore(ctx context.Context, ossEndpoint string, s3Client *s3.S3)
 }
 
 func GetBucketClaim(ctx context.Context, bucketClient *bucketclientset.Clientset, bucketClaim *v1alpha1.BucketClaim) (*v1alpha1.BucketClaim, error) {
-	err := retry(ctx, func() error {
+	err := retry.OnError(retryBackoff, alwaysRetry, func() error {
 		var err error
 
 		bucketClaim, err = bucketClient.ObjectstorageV1alpha1().BucketClaims(bucketClaim.Namespace).Get(ctx, bucketClaim.Name, metav1.GetOptions{})
@@ -86,7 +82,7 @@ func GetBucketClaim(ctx context.Context, bucketClient *bucketclientset.Clientset
 func GetBucket(ctx context.Context, bucketClient *bucketclientset.Clientset, bucketClaim *v1alpha1.BucketClaim) (*v1alpha1.Bucket, error) {
 	var bucket *v1alpha1.Bucket
 
-	err := retry(ctx, func() error {
+	err := retry.OnError(retryBackoff, alwaysRetry, func() error {
 		var err error
 
 		bucketClaim, err = bucketClient.ObjectstorageV1alpha1().BucketClaims(bucketClaim.Namespace).Get(ctx, bucketClaim.Name, metav1.GetOptions{})
@@ -104,7 +100,7 @@ func GetBucket(ctx context.Context, bucketClient *bucketclientset.Clientset, buc
 		return nil, err
 	}
 
-	err = retry(ctx, func() error {
+	err = retry.OnError(retryBackoff, alwaysRetry, func() error {
 		var err error
 
 		name := bucketClaim.Status.BucketName
@@ -124,7 +120,7 @@ func GetBucket(ctx context.Context, bucketClient *bucketclientset.Clientset, buc
 }
 
 func CheckBucketStatusReady(ctx context.Context, bucketClient *bucketclientset.Clientset, bucketName string) error {
-	err := retry(ctx, func() error {
+	err := retry.OnError(retryBackoff, alwaysRetry, func() error {
 		var err error
 
 		bucket, err := bucketClient.ObjectstorageV1alpha1().Buckets().Get(ctx, bucketName, metav1.GetOptions{})
@@ -146,7 +142,7 @@ func CheckBucketStatusReady(ctx context.Context, bucketClient *bucketclientset.C
 }
 
 func CheckBucketStatusNotReady(ctx context.Context, bucketClient *bucketclientset.Clientset, bucketName string) error {
-	err := retry(ctx, func() error {
+	err := retry.OnError(retryBackoff, alwaysRetry, func() error {
 		var err error
 
 		bucket, err := bucketClient.ObjectstorageV1alpha1().Buckets().Get(ctx, bucketName, metav1.GetOptions{})
@@ -168,7 +164,7 @@ func CheckBucketStatusNotReady(ctx context.Context, bucketClient *bucketclientse
 }
 
 func CheckBucketExistenceInObjectstore(ctx context.Context, s3Client *s3.S3, bucketName string) error {
-	err := retry(ctx, func() error {
+	err := retry.OnError(retryBackoff, alwaysRetry, func() error {
 		bucketList, err := s3Client.ListBuckets(&s3.ListBucketsInput{})
 		if err != nil {
 			return err
@@ -190,7 +186,7 @@ func CheckBucketExistenceInObjectstore(ctx context.Context, s3Client *s3.S3, buc
 }
 
 func CheckBucketDeletionInObjectstore(ctx context.Context, s3Client *s3.S3, bucketName string) error {
-	err := retry(ctx, func() error {
+	err := retry.OnError(retryBackoff, alwaysRetry, func() error {
 		bucketList, err := s3Client.ListBuckets(&s3.ListBucketsInput{})
 		if err != nil {
 			return err
@@ -213,7 +209,7 @@ func CheckBucketDeletionInObjectstore(ctx context.Context, s3Client *s3.S3, buck
 
 func GetBucketAccess(ctx context.Context, bucketClient *bucketclientset.Clientset, bucketAccessName, bucketAccessNamespace string) (*v1alpha1.BucketAccess, error) {
 	var bucketAccess *v1alpha1.BucketAccess
-	err := retry(ctx, func() error {
+	err := retry.OnError(retryBackoff, alwaysRetry, func() error {
 		var err error
 
 		bucketAccess, err = bucketClient.ObjectstorageV1alpha1().BucketAccesses(bucketAccessNamespace).Get(ctx, bucketAccessName, metav1.GetOptions{})
@@ -236,7 +232,7 @@ func GetBucketAccess(ctx context.Context, bucketClient *bucketclientset.Clientse
 
 func CheckBucketAccessNotGranted(ctx context.Context, bucketClient *bucketclientset.Clientset, bucketAccessName, bucketAccessNamespace string) error {
 	var bucketAccess *v1alpha1.BucketAccess
-	err := retry(ctx, func() error {
+	err := retry.OnError(retryBackoff, alwaysRetry, func() error {
 		var err error
 
 		bucketAccess, err = bucketClient.ObjectstorageV1alpha1().BucketAccesses(bucketAccessNamespace).Get(ctx, bucketAccessName, metav1.GetOptions{})
@@ -319,7 +315,7 @@ func checkUserExistsUtil(ctx context.Context, api *admin.API, uuid string) (bool
 }
 
 func CheckUserExists(ctx context.Context, api *admin.API, uuid string) (bool, error) {
-	err := retry(ctx, func() error {
+	err := retry.OnError(retryBackoff, alwaysRetry, func() error {
 		var err error
 
 		exists, err := checkUserExistsUtil(ctx, api, uuid)
@@ -341,7 +337,7 @@ func CheckUserExists(ctx context.Context, api *admin.API, uuid string) (bool, er
 }
 
 func CheckUserDeletion(ctx context.Context, api *admin.API, uuid string) error {
-	err := retry(ctx, func() error {
+	err := retry.OnError(retryBackoff, alwaysRetry, func() error {
 		var err error
 
 		exists, err := checkUserExistsUtil(ctx, api, uuid)

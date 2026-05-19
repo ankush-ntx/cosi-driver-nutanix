@@ -116,13 +116,12 @@ func (s *S3Agent) CreateBucket(name string) error {
 	_, err := s.Client.CreateBucket(bucketInput)
 	if err != nil {
 		if aerr, ok := err.(awserr.Error); ok {
-			klog.InfoS("DEBUG: after s3 call", "ok", ok, "aerr", aerr)
 			switch aerr.Code() {
 			case s3.ErrCodeBucketAlreadyExists:
-				klog.InfoS("Bucket already exists", "name", name)
+				klog.InfoS("Bucket already exists", "name", name, "aerr", aerr)
 				return nil
 			case s3.ErrCodeBucketAlreadyOwnedByYou:
-				klog.InfoS("Bucket already owned by you", "name", name)
+				klog.InfoS("Bucket already owned by you", "name", name, "aerr", aerr)
 				return nil
 			}
 		}
@@ -140,9 +139,8 @@ func (s *S3Agent) DeleteBucket(name string) (bool, error) {
 	})
 	if err != nil {
 		if aerr, ok := err.(awserr.Error); ok {
-			klog.InfoS("DEBUG: after s3 call", "ok", ok, "aerr", aerr)
 			if aerr.Code() == s3.ErrCodeNoSuchBucket {
-				klog.InfoS("Bucket does not exist", "name", name)
+				klog.InfoS("Bucket does not exist", "name", name, "aerr", aerr)
 				return true, nil
 			}
 		}
