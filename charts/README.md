@@ -52,8 +52,9 @@ The following table lists the configurable parameters of the cosi-driver-nutanix
 | `secret.access_key`                                | Admin IAM Access key to be used for Nutanix Objects                        | Yes      | `""`                                                                         |
 | `secret.secret_key`                                | Admin IAM Secret key to be used for Nutanix Objects                        | Yes      | `""`                                                                         |
 | `secret.pc_endpoint`                               | PC endpoint                                                                | Yes      | `""`                                                                         |
-| `secret.pc_username`                               | PC username                                                                | Yes      | `""`                                                                         |
-| `secret.pc_password`                               | PC password                                                                | Yes      | `""`                                                                         |
+| `secret.pc_api_key`                                | PC Service Account API key (recommended). Sent as `X-ntnx-api-key` header. When set, takes precedence over `pc_username`/`pc_password`. | Conditional | `""` |
+| `secret.pc_username`                               | PC username. Required only when `pc_api_key` is empty.                     | Conditional | `"admin"`                                                                 |
+| `secret.pc_password`                               | PC password. Required only when `pc_api_key` is empty.                     | Conditional | `""`                                                                      |
 | `secret.account_name`                              | Account Name is a displayName identifier Prefix for Nutanix                | No       | `"ntnx-cosi-iam-user"`                                                       |
 | `tls.caSecretName`                                 | Specify an existing secret name to use for the tls certificates            | No       | `""`                                                                         |
 | `tls.s3.insecure`                                  | Controls whether S3 certificate chain will be validated                    | Yes      | `false`                                                                      |
@@ -91,6 +92,21 @@ Install the driver in the `cosi-driver-nutanix` namespace (add the `--create-nam
  ```console
  helm install cosi-driver -n cosi-driver-nutanix -f values.yaml .
  ```
+
+### PC Service Account & required permissions
+Authenticating to Prism Central with a Service Account API key is the recommended path. The driver will send the key in the `X-ntnx-api-key` header on every call to the PC IAM proxy and fall back to `pc_username` / `pc_password` only when no key is supplied.
+
+Set the API key via Helm:
+```console
+helm install cosi-driver -n cosi-driver-nutanix . --set secret.pc_api_key=<api-key>
+```
+or in `values.yaml`:
+```yaml
+secret:
+  pc_api_key: "<api-key>"
+```
+
+For the minimum PC RBAC permissions the driver needs, how to create the Service Account in Prism Central, and the list of PC API calls the driver makes, see [docs/pc-rbac.md](../docs/pc-rbac.md).
 
 ### Steps to add the TLS certificates to the installation of COSI:
 In `values.yaml` file, 

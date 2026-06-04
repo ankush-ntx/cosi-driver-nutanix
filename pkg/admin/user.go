@@ -123,7 +123,7 @@ func (api *API) CreateUser(ctx context.Context, username, display_name string) (
 		return result, fmt.Errorf("failed to create http request. %w", err)
 	}
 
-	request.SetBasicAuth(api.PCUsername, api.PCPassword)
+	api.Authenticate(request)
 	request.Header.Add("Content-Type", "application/json")
 	resp, err := api.HTTPClient.Do(request)
 	if err != nil {
@@ -183,7 +183,7 @@ func (api *API) listUsers(ctx context.Context) (NutanixUsersListResp, error) {
 		return result, fmt.Errorf("failed to create http request. %w", err)
 	}
 
-	request.SetBasicAuth(api.PCUsername, api.PCPassword)
+	api.Authenticate(request)
 	resp, err := api.HTTPClient.Do(request)
 	if err != nil {
 		return result, fmt.Errorf("failed to send http request. %w", err)
@@ -234,7 +234,7 @@ func (api *API) createAccessKeyForExistingUser(ctx context.Context, username str
 		return NutanixUserResp{}, fmt.Errorf("failed to create http request. %w", err)
 	}
 
-	request.SetBasicAuth(api.PCUsername, api.PCPassword)
+	api.Authenticate(request)
 	request.Header.Add("Content-Type", "application/json")
 	resp, err := api.HTTPClient.Do(request)
 	if err != nil {
@@ -287,7 +287,7 @@ func (api *API) RemoveUser(ctx context.Context, uuid string) error {
 		return fmt.Errorf("failed to create http request. %w", err)
 	}
 
-	delete_request.SetBasicAuth(api.PCUsername, api.PCPassword)
+	api.Authenticate(delete_request)
 	delete_resp, err := api.HTTPClient.Do(delete_request)
 	if err != nil {
 		return fmt.Errorf("failed to send http request. %w", err)

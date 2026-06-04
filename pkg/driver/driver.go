@@ -26,7 +26,7 @@ import (
 )
 
 func NewDriver(ctx context.Context, provisioner, ntnxEndpoint, accessKey, secretKey,
-	pcEndpoint, pcUsername, pcPassword, accountName, s3CaCert, pcCaCert string, s3Insecure, pcInsecure bool) (*IdentityServer, *ProvisionerServer, error) {
+	pcEndpoint, pcUsername, pcPassword, pcAPIKey, accountName, s3CaCert, pcCaCert string, s3Insecure, pcInsecure bool) (*IdentityServer, *ProvisionerServer, error) {
 
 	s3Client, err := s3client.NewS3Agent(accessKey, secretKey, ntnxEndpoint, s3CaCert, s3Insecure, true)
 	if err != nil {
@@ -35,7 +35,7 @@ func NewDriver(ctx context.Context, provisioner, ntnxEndpoint, accessKey, secret
 		return nil, nil, err
 	}
 
-	ntnxIamClient, err := ntnxIam.New(ntnxEndpoint, accessKey, secretKey, pcEndpoint, pcUsername, pcPassword, accountName, pcCaCert, pcInsecure, nil)
+	ntnxIamClient, err := ntnxIam.New(ntnxEndpoint, accessKey, secretKey, pcEndpoint, pcUsername, pcPassword, pcAPIKey, accountName, pcCaCert, pcInsecure, nil)
 	if err != nil {
 		errMsg := fmt.Errorf("failed to create IAM client: %w", err)
 		klog.Errorln(errMsg)
