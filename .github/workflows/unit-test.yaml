@@ -25,6 +25,6 @@ jobs:
 
       - name: Run tests
         run: |
-          go test ./... -v -coverprofile=coverage.out -skip-coverage-tools
+          go test ./... -v -coverprofile=coverage.out
         env:
           SKIP_COVERAGE_TOOLS: "true"
