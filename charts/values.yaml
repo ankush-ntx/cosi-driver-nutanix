@@ -21,7 +21,14 @@ secret:
   secret_key: ""
   # Prism Central endpoint, eg. "https://10.51.149.82:9440"
   pc_endpoint: ""
-  # PC Credentials.
+  # PC Service Account API key (recommended). Sent to Prism Central in
+  # the "X-ntnx-api-key" header. When non-empty it takes precedence over
+  # pc_username/pc_password and pc_username/pc_password are no longer
+  # required. See docs/pc-rbac.md for the minimum permissions the
+  # Service Account needs.
+  pc_api_key: ""
+  # PC Credentials. Optional when pc_api_key is set.
+  # PC Service Account API key is recommended over username/password.
   pc_username: "admin"
   pc_password: ""
   # Account Name is a displayName identifier Prefix for Nutanix.

@@ -42,7 +42,8 @@ $ cd cosi-driver-nutanix
 - `ACCESS_KEY` : Nutanix Object Store Access Key
 - `SECRET_KEY` : Nutanix Object Store Secret Key
 - `PC_ENDPOINT` : Prism Central endpoint'
-- `PC_SECRET` : Prism Central Credentials in the form 'username:password'
+- `PC_API_KEY` (Optional, recommended) : Prism Central Service Account API key. Sent as the `X-ntnx-api-key` header and takes precedence over `PC_SECRET`. See [docs/pc-rbac.md](docs/pc-rbac.md) for the minimum required PC permissions and how to create the Service Account.
+- `PC_SECRET` : Prism Central Credentials in the form 'username:password'. Required only when `PC_API_KEY` is not set.
 - `S3_INSECURE` : Controls whether certificate chain will be validated for S3 endpoint (Default: "false")
 - `PC_INSECURE` : Controls whether certificate chain will be validated for Prism Central (Default: "false")
 - `ACCOUNT_NAME` (Optional) : DisplayName identifier prefix for Nutanix Object Store (Default_Prefix: ntnx-cosi-iam-user)

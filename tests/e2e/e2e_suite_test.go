@@ -36,6 +36,7 @@ var (
 	prismEndpoint string
 	prismUsername string
 	prismPassword string
+	prismApiKey   string
 	accessKey     string
 	secretKey     string
 	nodeIP        string
@@ -72,6 +73,9 @@ var _ = BeforeSuite(func(ctx context.Context) {
 	prismPassword, exists = os.LookupEnv("PC_PASSWORD")
 	Expect(exists).To(BeTrue())
 
+	prismApiKey, exists = os.LookupEnv("PC_API_KEY")
+	Expect(exists).To(BeTrue())
+
 	accessKey, exists = os.LookupEnv("ACCESS_KEY")
 	Expect(exists).To(BeTrue())
 
@@ -88,7 +92,7 @@ var _ = BeforeSuite(func(ctx context.Context) {
 	}
 
 	By("Building kubernetes client")
-	testConfig, err := clientcmd.BuildConfigFromFlags("", kubeConfig)
+	testConfig, err := clientcmd.BuildConfigFromFlags("" /* masterURL */, kubeConfig)
 	Expect(err).ToNot(HaveOccurred())
 	k8sClient, err = kubernetes.NewForConfig(testConfig)
 	Expect(err).ToNot(HaveOccurred())
@@ -101,7 +105,7 @@ var _ = BeforeSuite(func(ctx context.Context) {
 	sess, err := session.NewSession(
 		aws.NewConfig().
 			WithRegion("us-east-1").
-			WithCredentials(credentials.NewStaticCredentials(accessKey, secretKey, "")).
+			WithCredentials(credentials.NewStaticCredentials(accessKey, secretKey, "" /* sessionToken */)).
 			WithEndpoint(ossEndpoint).
 			WithS3ForcePathStyle(true).
 			WithMaxRetries(5).
@@ -130,6 +134,7 @@ var _ = BeforeSuite(func(ctx context.Context) {
 		PCEndpoint:  prismEndpoint,
 		PCUsername:  prismUsername,
 		PCPassword:  prismPassword,
+		PCAPIKey:    prismApiKey,
 		AccountName: "cosi-test",
 		HTTPClient: &http.Client{
 			Transport: &http.Transport{

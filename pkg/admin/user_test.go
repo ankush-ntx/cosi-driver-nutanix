@@ -91,7 +91,7 @@ func TestCreateUser(t *testing.T) {
 
 	t.Run("TestCreateUser_MissingUsername", func(t *testing.T) {
 		api := &admin.API{}
-		_, err := api.CreateUser(ctx, "", mockDisplayName)
+		_, err := api.CreateUser(ctx, "" /* username */, mockDisplayName)
 		assert.Contains(t, err.Error(), "username not set")
 	})
 
@@ -289,6 +289,59 @@ func TestCreateUser(t *testing.T) {
 		assert.Contains(t, err.Error(), "failed to list existing users")
 	})
 
+	t.Run("TestCreateUser_SendsAPIKeyHeader", func(t *testing.T) {
+		// Service Account auth path: when the API has PCAPIKey set,
+		// every request to the IAM proxy must carry the
+		// X-ntnx-api-key header and must NOT fall back to Basic Auth.
+		var capturedHeader, capturedAuth string
+		mockClient := mocks.MockHTTPClient{
+			DoFunc: func(req *http.Request) (*http.Response, error) {
+				capturedHeader = req.Header.Get("X-ntnx-api-key")
+				capturedAuth = req.Header.Get("Authorization")
+				return &http.Response{
+					StatusCode: 200,
+					Body:       io.NopCloser(bytes.NewBufferString(mockRespBody)),
+				}, nil
+			},
+		}
+
+		api := admin.API{
+			PCEndpoint: "https://pc.example.com",
+			PCAPIKey:   "test-key",
+			HTTPClient: mockClient,
+		}
+
+		_, err := api.CreateUser(ctx, mockUsername, mockDisplayName)
+		assert.NoError(t, err)
+		assert.Equal(t, "test-key", capturedHeader)
+		assert.Empty(t, capturedAuth)
+	})
+
+	t.Run("TestCreateUser_SendsBasicAuthWhenNoAPIKey", func(t *testing.T) {
+		// Regression: with username/password only the legacy Basic
+		// Auth header must still be set, and the API key header must
+		// be absent.
+		var capturedHeader, capturedAuth string
+		mockClient := mocks.MockHTTPClient{
+			DoFunc: func(req *http.Request) (*http.Response, error) {
+				capturedHeader = req.Header.Get("X-ntnx-api-key")
+				capturedAuth = req.Header.Get("Authorization")
+				return &http.Response{
+					StatusCode: 200,
+					Body:       io.NopCloser(bytes.NewBufferString(mockRespBody)),
+				}, nil
+			},
+		}
+
+		api := baseApi
+		api.HTTPClient = mockClient
+
+		_, err := api.CreateUser(ctx, mockUsername, mockDisplayName)
+		assert.NoError(t, err)
+		assert.Empty(t, capturedHeader)
+		assert.True(t, strings.HasPrefix(capturedAuth, "Basic "), "expected Basic Auth header, got %q", capturedAuth)
+	})
+
 	t.Run("TestCreateUser_AlreadyExists_AccessKeyCreateFails", func(t *testing.T) {
 		mockClient := mocks.MockHTTPClient{
 			DoFunc: func(req *http.Request) (*http.Response, error) {
@@ -330,7 +383,7 @@ func TestRemoveUser(t *testing.T) {
 		api := baseApi
 		api.HTTPClient = mocks.MockHTTPClient{}
 
-		err := api.RemoveUser(ctx, "")
+		err := api.RemoveUser(ctx, "" /* uuid */)
 		assert.Contains(t, err.Error(), "user UUID not set")
 	})
 

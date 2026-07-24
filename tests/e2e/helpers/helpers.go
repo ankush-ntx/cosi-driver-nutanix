@@ -298,7 +298,7 @@ func checkUserExistsUtil(ctx context.Context, api *admin.API, uuid string) (bool
 		return false, fmt.Errorf("failed to create http request. %w", err)
 	}
 
-	request.SetBasicAuth(api.PCUsername, api.PCPassword)
+	api.Authenticate(request)
 	resp, err := api.HTTPClient.Do(request)
 	if err != nil {
 		return false, fmt.Errorf("failed to send http request. %w", err)
@@ -368,7 +368,7 @@ func GetNumOfUsersInObjectstore(ctx context.Context, api *admin.API) (int, error
 		return -1, fmt.Errorf("failed to create http request. %w", err)
 	}
 
-	request.SetBasicAuth(api.PCUsername, api.PCPassword)
+	api.Authenticate(request)
 	resp, err := api.HTTPClient.Do(request)
 	if err != nil {
 		return -1, fmt.Errorf("failed to send http request. %w", err)

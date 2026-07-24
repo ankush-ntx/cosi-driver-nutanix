@@ -19,7 +19,14 @@ var (
 	ErrNoPCEndpoint = errors.New("Prism Central endpoint for IAM user management not set")
 	ErrNoPCUsername = errors.New("Prism Central username for IAM user management not set")
 	ErrNoPCPassword = errors.New("Prism Central password for IAM user management not set")
+	ErrNoPCCreds = errors.New("Prism Central credentials not set: provide either a Service Account API key or a username/password pair")
 )
+
+// pcAPIKeyHeader is the HTTP header used by PC Service Account
+// authentication. When PCAPIKey is non-empty on the API struct, every
+// outgoing request to the IAM proxy carries this header instead of HTTP
+// Basic Auth.
+const pcAPIKeyHeader = "X-ntnx-api-key"
 
 // HTTPClient interface that conforms to that of the http package's Client.
 type HTTPClient interface {
@@ -41,12 +48,13 @@ type API struct {
 	PCEndpoint  string
 	PCUsername  string
 	PCPassword  string
+	PCAPIKey    string
 	AccountName string
 	HTTPClient  HTTPClient
 }
 
 // New returns client for Nutanix object store
-func New(endpoint, accessKey, secretKey, pcEndpoint, pcUsername, pcPassword, accountName, caCert string, insecure bool, httpClient HTTPClient) (*API, error) {
+func New(endpoint, accessKey, secretKey, pcEndpoint, pcUsername, pcPassword, pcAPIKey, accountName, caCert string, insecure bool, httpClient HTTPClient) (*API, error) {
 	// validate endpoint
 	if endpoint == "" {
 		return nil, ErrNoEndpoint
@@ -67,14 +75,21 @@ func New(endpoint, accessKey, secretKey, pcEndpoint, pcUsername, pcPassword, acc
 		return nil, ErrNoPCEndpoint
 	}
 
-	// validate pc username
-	if pcUsername == "" {
-		return nil, ErrNoPCUsername
+	// validate pc credentials: either an API key (preferred) or a
+	// username/password pair must be supplied. When both are absent we
+	// cannot authenticate to the IAM proxy at all, so this is fatal.
+	if pcAPIKey == "" && pcUsername == "" && pcPassword == "" {
+		return nil, ErrNoPCCreds
 	}
-
-	// validate pc password
-	if pcPassword == "" {
-		return nil, ErrNoPCPassword
+	// When no API key is provided we fall back to Basic Auth and require
+	// both halves of the credential pair to be present.
+	if pcAPIKey == "" {
+		if pcUsername == "" {
+			return nil, ErrNoPCUsername
+		}
+		if pcPassword == "" {
+			return nil, ErrNoPCPassword
+		}
 	}
 
 	// set default account_name when empty
@@ -104,9 +119,26 @@ func New(endpoint, accessKey, secretKey, pcEndpoint, pcUsername, pcPassword, acc
 		PCEndpoint:  pcEndpoint,
 		PCUsername:  pcUsername,
 		PCPassword:  pcPassword,
+		PCAPIKey:    pcAPIKey,
 		AccountName: accountName,
 		HTTPClient:  client,
 	}, nil
+}
+
+// Authenticate attaches the appropriate authentication header to req
+// based on which PC credential is populated on the API struct. The PC
+// Service Account API key wins when set; otherwise we fall back to HTTP
+// Basic Auth using PCUsername/PCPassword.
+//
+// This is the single source of truth for PC auth on outgoing requests
+// so callers in user.go and the e2e helpers don't have to know which
+// credential is in play.
+func (api *API) Authenticate(req *http.Request) {
+	if api.PCAPIKey != "" {
+		req.Header.Set(pcAPIKeyHeader, api.PCAPIKey)
+		return
+	}
+	req.SetBasicAuth(api.PCUsername, api.PCPassword)
 }
 
 func GetCredsFromPCSecret(key string) (string, string, error) {

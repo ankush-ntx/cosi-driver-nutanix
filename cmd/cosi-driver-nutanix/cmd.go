@@ -43,6 +43,7 @@ var (
 	PCUsername    = ""
 	PCPassword    = ""
 	PCSecret      = ""
+	PCAPIKey      = ""
 	AccountName   = ""
 	S3CACert      = ""
 	PCCACert      = ""
@@ -109,7 +110,13 @@ func init() {
 		"pc_secret",
 		"k",
 		PCSecret,
-		"Prism Central Credentials in the format <pc_user>:<pc_password>")
+		"Prism Central Credentials in the format <pc_user>:<pc_password>. Optional when pc_api_key is set.")
+
+	stringFlag(&PCAPIKey,
+		"pc_api_key",
+		"K",
+		PCAPIKey,
+		"Prism Central Service Account API key (sent as X-ntnx-api-key header). If set, takes precedence over pc_secret.")
 
 	stringFlag(&AccountName,
 		"account_name",
@@ -150,15 +157,18 @@ func init() {
 }
 
 func run(ctx context.Context) error {
-	PCUsername, PCPassword, err := ntnxIam.GetCredsFromPCSecret(PCSecret)
-	if err != nil {
-		errMsg := fmt.Errorf("failed to extract PC credential information from secret: %w", err)
-		klog.Error(errMsg)
-		return err
+	pcUsername, pcPassword := PCUsername, PCPassword
+	if PCAPIKey == "" {
+		var err error
+		pcUsername, pcPassword, err = ntnxIam.GetCredsFromPCSecret(PCSecret)
+		if err != nil {
+			errMsg := fmt.Errorf("failed to extract PC credential information from secret: %w", err)
+			klog.Error(errMsg)
+			return err
+		}
 	}
 
-	err = ntnxIam.ValidateEndpoint(PCEndpoint)
-	if err != nil {
+	if err := ntnxIam.ValidateEndpoint(PCEndpoint); err != nil {
 		klog.Error(fmt.Errorf("failed to validate PC endpoint: %w", err))
 		return err
 	}
@@ -169,8 +179,9 @@ func run(ctx context.Context) error {
 		AccessKey,
 		SecretKey,
 		PCEndpoint,
-		PCUsername,
-		PCPassword,
+		pcUsername,
+		pcPassword,
+		PCAPIKey,
 		AccountName,
 		S3CACert,
 		PCCACert,
