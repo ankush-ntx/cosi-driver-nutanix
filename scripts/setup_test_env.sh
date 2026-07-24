@@ -10,6 +10,7 @@ usage() {
     echo "  -i, --pc_endpoint ENDPOINT      Prism Central endpoint, eg. "https://10.51.142.82:9440"."
     echo "  -u, --pc_user USERNAME      Prism Central username. [default = admin]"
     echo "  -p, --pc_pass PASSWORD      Prism Central password."
+    echo "  -k, --pc_api_key KEY      Prism Central API key. If set, takes precedence over --pc_user/--pc_pass."
     echo "  -a, --access_key KEY      Admin IAM Access key to be used for Nutanix Objects."
     echo "  -s, --secret_key KEY      Admin IAM Secret key to be used for Nutanix Objects."
     echo "  -h, --help                Display this help and exit."
@@ -24,6 +25,7 @@ OSS_ENDPOINT=""
 PC_ENDPOINT=""
 PC_USERNAME="admin"
 PC_PASSWORD=""
+PC_API_KEY=""
 ACCESS_KEY=""
 SECRET_KEY=""
 
@@ -51,6 +53,10 @@ while [[ "$#" -gt 0 ]]; do
             ;;
         -p|--pc_pass)
             PC_PASSWORD="$2"
+            shift 2
+            ;;
+        -k|--pc_api_key)
+            PC_API_KEY="$2"
             shift 2
             ;;
         -a|--access_key)
@@ -82,8 +88,8 @@ if [[ -z $USE_TRITON ]]; then
         usage
     fi
 
-    if [[ -z "$PC_PASSWORD" ]]; then
-        echo "[ERROR] --pc_pass is required."
+    if [[ -z "$PC_API_KEY" && -z "$PC_PASSWORD" ]]; then
+        echo "[ERROR] Either --pc_api_key or --pc_pass is required."
         usage
     fi
 
@@ -165,14 +171,21 @@ if [[ -n $USE_TRITON ]]; then
 fi
 
 echo "[INFO] Installing the COSI Helm chart from ./charts"
+PC_AUTH_ARGS=()
+if [[ -n "$PC_API_KEY" ]]; then
+    PC_AUTH_ARGS+=(--set=secret.pc_api_key="${PC_API_KEY}")
+else
+    PC_AUTH_ARGS+=(--set=secret.pc_username="${PC_USERNAME}")
+    PC_AUTH_ARGS+=(--set=secret.pc_password="${PC_PASSWORD}")
+fi
+
 helm install cosi-driver -n "${DRIVER_NAMESPACE}" ./charts/ \
     --set=image.tag=latest \
     --set=secret.endpoint="${OSS_ENDPOINT}" \
     --set=secret.access_key="${ACCESS_KEY}" \
     --set=secret.secret_key="${SECRET_KEY}" \
     --set=secret.pc_endpoint="${PC_ENDPOINT}" \
-    --set=secret.pc_username="${PC_USERNAME}" \
-    --set=secret.pc_password="${PC_PASSWORD}" \
+    "${PC_AUTH_ARGS[@]}" \
     --set=tls.s3.insecure=true \
     --set=tls.pc.insecure=true > /dev/null 2>&1
 
@@ -186,6 +199,7 @@ export OSS_ENDPOINT="${OSS_ENDPOINT}"
 export PC_ENDPOINT="${PC_ENDPOINT}"
 export PC_USERNAME="${PC_USERNAME}"
 export PC_PASSWORD="${PC_PASSWORD}"
+export PC_API_KEY="${PC_API_KEY}"
 export ACCESS_KEY="${ACCESS_KEY}"
 export SECRET_KEY="${SECRET_KEY}"
 export NODE_IP="${NODE_IP}"

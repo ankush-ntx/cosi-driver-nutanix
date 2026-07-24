@@ -91,7 +91,7 @@ func TestCreateUser(t *testing.T) {
 
 	t.Run("TestCreateUser_MissingUsername", func(t *testing.T) {
 		api := &admin.API{}
-		_, err := api.CreateUser(ctx, "", mockDisplayName)
+		_, err := api.CreateUser(ctx, "" /* username */, mockDisplayName)
 		assert.Contains(t, err.Error(), "username not set")
 	})
 
@@ -383,7 +383,7 @@ func TestRemoveUser(t *testing.T) {
 		api := baseApi
 		api.HTTPClient = mocks.MockHTTPClient{}
 
-		err := api.RemoveUser(ctx, "")
+		err := api.RemoveUser(ctx, "" /* uuid */)
 		assert.Contains(t, err.Error(), "user UUID not set")
 	})
 

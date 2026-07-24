@@ -44,7 +44,10 @@ func TestNew(t *testing.T) {
 	validAccountName := "custom-account"
 
 	t.Run("TestNew_DefaultAccount", func(t *testing.T) {
-		api, err := admin.New(validEndpoint, validAccessKey, validSecretKey, validPCEndpoint, validPCUsername, validPCPassword, "", "", validPEMCert, false, nil)
+		api, err := admin.New(
+			validEndpoint, validAccessKey, validSecretKey, validPCEndpoint,
+			validPCUsername, validPCPassword, "" /* pcAPIKey */, "", /* accountName */
+			validPEMCert, false /* insecure */, nil /* httpClient */)
 
 		_, ok := api.HTTPClient.(*http.Client)
 		require.True(t, ok)
@@ -61,7 +64,10 @@ func TestNew(t *testing.T) {
 	})
 
 	t.Run("TestNew_CustomAccount", func(t *testing.T) {
-		api, err := admin.New(validEndpoint, validAccessKey, validSecretKey, validPCEndpoint, validPCUsername, validPCPassword, "", validAccountName, validPEMCert, false, nil)
+		api, err := admin.New(
+			validEndpoint, validAccessKey, validSecretKey, validPCEndpoint,
+			validPCUsername, validPCPassword, "" /* pcAPIKey */, validAccountName,
+			validPEMCert, false /* insecure */, nil /* httpClient */)
 
 		require.NoError(t, err)
 		require.NotNil(t, api)
@@ -71,7 +77,10 @@ func TestNew(t *testing.T) {
 	t.Run("TestNew_APIKeyOnly", func(t *testing.T) {
 		// Service Account path: API key alone is sufficient, no
 		// username/password required.
-		api, err := admin.New(validEndpoint, validAccessKey, validSecretKey, validPCEndpoint, "", "", validPCAPIKey, validAccountName, validPEMCert, false, nil)
+		api, err := admin.New(
+			validEndpoint, validAccessKey, validSecretKey, validPCEndpoint,
+			"" /* pcUsername */, "" /* pcPassword */, validPCAPIKey, validAccountName,
+			validPEMCert, false /* insecure */, nil /* httpClient */)
 		require.NoError(t, err)
 		require.NotNil(t, api)
 		assert.Equal(t, validPCAPIKey, api.PCAPIKey)
@@ -80,28 +89,40 @@ func TestNew(t *testing.T) {
 	})
 
 	t.Run("TestNew_EmptyEndpoint", func(t *testing.T) {
-		api, err := admin.New("", validAccessKey, validSecretKey, validPCEndpoint, validPCUsername, validPCPassword, "", validAccountName, validPEMCert, false, nil)
+		api, err := admin.New(
+			"" /* endpoint */, validAccessKey, validSecretKey, validPCEndpoint,
+			validPCUsername, validPCPassword, "" /* pcAPIKey */, validAccountName,
+			validPEMCert, false /* insecure */, nil /* httpClient */)
 		require.Error(t, err)
 		assert.Nil(t, api)
 		assert.Equal(t, admin.ErrNoEndpoint, err)
 	})
 
 	t.Run("TestNew_EmptyAccessKey", func(t *testing.T) {
-		api, err := admin.New(validEndpoint, "", validSecretKey, validPCEndpoint, validPCUsername, validPCPassword, "", validAccountName, validPEMCert, false, nil)
+		api, err := admin.New(
+			validEndpoint, "" /* accessKey */, validSecretKey, validPCEndpoint,
+			validPCUsername, validPCPassword, "" /* pcAPIKey */, validAccountName,
+			validPEMCert, false /* insecure */, nil /* httpClient */)
 		require.Error(t, err)
 		assert.Nil(t, api)
 		assert.Equal(t, admin.ErrNoAccessKey, err)
 	})
 
 	t.Run("TestNew_EmptySecretKey", func(t *testing.T) {
-		api, err := admin.New(validEndpoint, validAccessKey, "", validPCEndpoint, validPCUsername, validPCPassword, "", validAccountName, validPEMCert, false, nil)
+		api, err := admin.New(
+			validEndpoint, validAccessKey, "" /* secretKey */, validPCEndpoint,
+			validPCUsername, validPCPassword, "" /* pcAPIKey */, validAccountName,
+			validPEMCert, false /* insecure */, nil /* httpClient */)
 		require.Error(t, err)
 		assert.Nil(t, api)
 		assert.Equal(t, admin.ErrNoSecretKey, err)
 	})
 
 	t.Run("TestNew_EmptyPCEndpoint", func(t *testing.T) {
-		api, err := admin.New(validEndpoint, validAccessKey, validSecretKey, "", validPCUsername, validPCPassword, "", validAccountName, validPEMCert, false, nil)
+		api, err := admin.New(
+			validEndpoint, validAccessKey, validSecretKey, "", /* pcEndpoint */
+			validPCUsername, validPCPassword, "" /* pcAPIKey */, validAccountName,
+			validPEMCert, false /* insecure */, nil /* httpClient */)
 		require.Error(t, err)
 		assert.Nil(t, api)
 		assert.Equal(t, admin.ErrNoPCEndpoint, err)
@@ -109,7 +130,10 @@ func TestNew(t *testing.T) {
 
 	t.Run("TestNew_NoPCCreds", func(t *testing.T) {
 		// Neither API key nor user/pass supplied: we can't talk to PC at all.
-		api, err := admin.New(validEndpoint, validAccessKey, validSecretKey, validPCEndpoint, "", "", "", validAccountName, validPEMCert, false, nil)
+		api, err := admin.New(
+			validEndpoint, validAccessKey, validSecretKey, validPCEndpoint,
+			"" /* pcUsername */, "" /* pcPassword */, "" /* pcAPIKey */, validAccountName,
+			validPEMCert, false /* insecure */, nil /* httpClient */)
 		require.Error(t, err)
 		assert.Nil(t, api)
 		assert.Equal(t, admin.ErrNoPCCreds, err)
@@ -118,14 +142,20 @@ func TestNew(t *testing.T) {
 	t.Run("TestNew_EmptyPCUsername", func(t *testing.T) {
 		// API key empty, password set, username missing -> still
 		// rejected on the Basic Auth path.
-		api, err := admin.New(validEndpoint, validAccessKey, validSecretKey, validPCEndpoint, "", validPCPassword, "", validAccountName, validPEMCert, false, nil)
+		api, err := admin.New(
+			validEndpoint, validAccessKey, validSecretKey, validPCEndpoint,
+			"" /* pcUsername */, validPCPassword, "" /* pcAPIKey */, validAccountName,
+			validPEMCert, false /* insecure */, nil /* httpClient */)
 		require.Error(t, err)
 		assert.Nil(t, api)
 		assert.Equal(t, admin.ErrNoPCUsername, err)
 	})
 
 	t.Run("TestNew_EmptyPCPassword", func(t *testing.T) {
-		api, err := admin.New(validEndpoint, validAccessKey, validSecretKey, validPCEndpoint, validPCUsername, "", "", validAccountName, validPEMCert, false, nil)
+		api, err := admin.New(
+			validEndpoint, validAccessKey, validSecretKey, validPCEndpoint,
+			validPCUsername, "" /* pcPassword */, "" /* pcAPIKey */, validAccountName,
+			validPEMCert, false /* insecure */, nil /* httpClient */)
 		require.Error(t, err)
 		assert.Nil(t, api)
 		assert.Equal(t, admin.ErrNoPCPassword, err)
@@ -133,7 +163,10 @@ func TestNew(t *testing.T) {
 
 	t.Run("TestNew_BadCACert", func(t *testing.T) {
 		invalidCACert := "invalid-cert"
-		api, err := admin.New(validEndpoint, validAccessKey, validSecretKey, validPCEndpoint, validPCUsername, validPCPassword, "", validAccountName, invalidCACert, false, nil)
+		api, err := admin.New(
+			validEndpoint, validAccessKey, validSecretKey, validPCEndpoint,
+			validPCUsername, validPCPassword, "" /* pcAPIKey */, validAccountName,
+			invalidCACert, false /* insecure */, nil /* httpClient */)
 		require.Error(t, err)
 		assert.Nil(t, api)
 		assert.Contains(t, err.Error(), "failed to decode CA cert")
@@ -146,7 +179,7 @@ func TestAuthenticate(t *testing.T) {
 		// X-ntnx-api-key header and the Authorization header must be
 		// left untouched.
 		api := admin.API{PCAPIKey: "service-account-key", PCUsername: "u", PCPassword: "p"}
-		req, err := http.NewRequest("GET", "https://example.com", nil)
+		req, err := http.NewRequest("GET", "https://example.com", nil /* body */)
 		require.NoError(t, err)
 
 		api.Authenticate(req)
@@ -159,7 +192,7 @@ func TestAuthenticate(t *testing.T) {
 		// With no API key set, Authenticate must fall back to Basic
 		// Auth and must not send the X-ntnx-api-key header.
 		api := admin.API{PCUsername: "admin", PCPassword: "password"}
-		req, err := http.NewRequest("GET", "https://example.com", nil)
+		req, err := http.NewRequest("GET", "https://example.com", nil /* body */)
 		require.NoError(t, err)
 
 		api.Authenticate(req)

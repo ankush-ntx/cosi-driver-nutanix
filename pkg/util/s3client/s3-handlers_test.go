@@ -49,7 +49,8 @@ func TestNewS3Agent(t *testing.T) {
 	t.Run("TestNewS3Agent_ValidSecureConnection", func(t *testing.T) {
 		// Insecure false and endpoint starting with "https" should succeed with a valid PEM CA certificate.
 		endpoint := "https://127.0.0.1:9440"
-		agent, err := s3client.NewS3Agent(accessKey, secretKey, endpoint, validPEMCert, false /* insecure */, false /* debug */)
+		agent, err := s3client.NewS3Agent(
+			accessKey, secretKey, endpoint, validPEMCert, false /* insecure */, false /* debug */)
 		require.NoError(t, err)
 		require.NotNil(t, agent)
 		require.NotNil(t, agent.Client)
@@ -57,7 +58,7 @@ func TestNewS3Agent(t *testing.T) {
 		// Additionally, verify that the client was built using an HTTP client with a proper timeout.
 		sess, err := session.NewSession(aws.NewConfig().
 			WithRegion("us-east-1").
-			WithCredentials(credentials.NewStaticCredentials(accessKey, secretKey, "")).
+			WithCredentials(credentials.NewStaticCredentials(accessKey, secretKey, "" /* sessionToken */)).
 			WithEndpoint(endpoint).
 			WithS3ForcePathStyle(true).
 			WithMaxRetries(5).
@@ -72,7 +73,8 @@ func TestNewS3Agent(t *testing.T) {
 	t.Run("TestNewS3Agent_ValidInsecureConnection", func(t *testing.T) {
 		// When insecure is true, even if the endpoint starts with "http", it should succeed.
 		endpoint := "http://127.0.0.1:9440"
-		agent, err := s3client.NewS3Agent(accessKey, secretKey, endpoint, validPEMCert, true /* insecure */, false /* debug */)
+		agent, err := s3client.NewS3Agent(
+			accessKey, secretKey, endpoint, validPEMCert, true /* insecure */, false /* debug */)
 		require.NoError(t, err)
 		require.NotNil(t, agent)
 		require.NotNil(t, agent.Client)
@@ -80,7 +82,7 @@ func TestNewS3Agent(t *testing.T) {
 		// Additionally, verify that the client was built using an HTTP client with a proper timeout.
 		sess, err := session.NewSession(aws.NewConfig().
 			WithRegion("us-east-1").
-			WithCredentials(credentials.NewStaticCredentials(accessKey, secretKey, "")).
+			WithCredentials(credentials.NewStaticCredentials(accessKey, secretKey, "" /* sessionToken */)).
 			WithEndpoint(endpoint).
 			WithS3ForcePathStyle(true).
 			WithMaxRetries(5).
@@ -95,7 +97,8 @@ func TestNewS3Agent(t *testing.T) {
 	t.Run("TestNewS3Agent_ErrorSecureWithHttpEndpoint", func(t *testing.T) {
 		// When insecure is false but the endpoint starts with "http", it should return an error.
 		endpoint := "http://127.0.0.1:9440"
-		agent, err := s3client.NewS3Agent(accessKey, secretKey, endpoint, validPEMCert, false /* insecure */, false /* debug */)
+		agent, err := s3client.NewS3Agent(
+			accessKey, secretKey, endpoint, validPEMCert, false /* insecure */, false /* debug */)
 		require.Error(t, err)
 		assert.Nil(t, agent)
 		assert.Contains(t, err.Error(), "'http' endpoint cannot be secure")
@@ -105,7 +108,8 @@ func TestNewS3Agent(t *testing.T) {
 		// Provide an invalid CA cert string that is not a valid PEM or base64 string.
 		endpoint := "https://127.0.0.1:9440"
 		invalidCACert := "not-base64"
-		agent, err := s3client.NewS3Agent(accessKey, secretKey, endpoint, invalidCACert, false /* insecure */, false /* debug */)
+		agent, err := s3client.NewS3Agent(
+			accessKey, secretKey, endpoint, invalidCACert, false /* insecure */, false /* debug */)
 		require.Error(t, err)
 		assert.Nil(t, agent)
 		// The error should come from transport.BuildTransportTLS. We expect an error related to decoding the CA cert.
@@ -117,7 +121,8 @@ func TestNewS3Agent(t *testing.T) {
 		// While we cannot easily inspect the AWS config from the created session,
 		// we can at least verify that the agent creation does not error.
 		endpoint := "https://127.0.0.1:9440"
-		agent, err := s3client.NewS3Agent(accessKey, secretKey, endpoint, validPEMCert, false /* insecure */, true /* debug */)
+		agent, err := s3client.NewS3Agent(
+			accessKey, secretKey, endpoint, validPEMCert, false /* insecure */, true /* debug */)
 		require.NoError(t, err)
 		require.NotNil(t, agent)
 	})
@@ -139,7 +144,7 @@ func TestCreateBucket(t *testing.T) {
 	t.Run("TestCreateBucket_AlreadyExists", func(t *testing.T) {
 		mockClient := &mocks.MockS3Client{
 			CreateBucketFunc: func(input *s3.CreateBucketInput) (*s3.CreateBucketOutput, error) {
-				return nil, awserr.New(s3.ErrCodeBucketAlreadyExists, "bucket exists", nil)
+				return nil, awserr.New(s3.ErrCodeBucketAlreadyExists, "bucket exists", nil /* origErr */)
 			},
 		}
 		s := &s3client.S3Agent{Client: mockClient}
@@ -150,7 +155,7 @@ func TestCreateBucket(t *testing.T) {
 	t.Run("TestCreateBucket_AlreadyOwned", func(t *testing.T) {
 		mockClient := &mocks.MockS3Client{
 			CreateBucketFunc: func(input *s3.CreateBucketInput) (*s3.CreateBucketOutput, error) {
-				return nil, awserr.New(s3.ErrCodeBucketAlreadyOwnedByYou, "already owned", nil)
+				return nil, awserr.New(s3.ErrCodeBucketAlreadyOwnedByYou, "already owned", nil /* origErr */)
 			},
 		}
 		s := &s3client.S3Agent{Client: mockClient}
@@ -189,7 +194,8 @@ func TestDeleteBucket(t *testing.T) {
 	t.Run("DeleteBucket_NoSuchBucket", func(t *testing.T) {
 		mockClient := &mocks.MockS3Client{
 			DeleteBucketFunc: func(input *s3.DeleteBucketInput) (*s3.DeleteBucketOutput, error) {
-				return &s3.DeleteBucketOutput{}, awserr.New(s3.ErrCodeNoSuchBucket, "The specified bucket does not exist.", nil)
+				return &s3.DeleteBucketOutput{}, awserr.New(
+					s3.ErrCodeNoSuchBucket, "The specified bucket does not exist.", nil /* origErr */)
 			},
 		}
 		s := &s3client.S3Agent{Client: mockClient}
@@ -289,7 +295,7 @@ func TestDeleteObjectInBucket(t *testing.T) {
 	t.Run("DeleteObjectInBucket_NoSuchBucket", func(t *testing.T) {
 		mock := &mocks.MockS3Client{
 			DeleteObjectFunc: func(input *s3.DeleteObjectInput) (*s3.DeleteObjectOutput, error) {
-				return nil, awserr.New(s3.ErrCodeNoSuchBucket, "bucket not found", nil)
+				return nil, awserr.New(s3.ErrCodeNoSuchBucket, "bucket not found", nil /* origErr */)
 			},
 		}
 		s := &s3client.S3Agent{Client: mock}
@@ -301,7 +307,7 @@ func TestDeleteObjectInBucket(t *testing.T) {
 	t.Run("DeleteObjectInBucket_NoSuchKey", func(t *testing.T) {
 		mock := &mocks.MockS3Client{
 			DeleteObjectFunc: func(input *s3.DeleteObjectInput) (*s3.DeleteObjectOutput, error) {
-				return nil, awserr.New(s3.ErrCodeNoSuchKey, "key not found", nil)
+				return nil, awserr.New(s3.ErrCodeNoSuchKey, "key not found", nil /* origErr */)
 			},
 		}
 		s := &s3client.S3Agent{Client: mock}

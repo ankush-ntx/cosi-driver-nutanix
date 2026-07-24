@@ -125,7 +125,7 @@ func TestDriverGrantBucketAccess(t *testing.T) {
 	t.Run("TestDriverGrantBucketAccess_NewPolicySuccess", func(t *testing.T) {
 		mockS3 := mocks.MockProvisionerS3{
 			GetBucketPolicyFunc: func(bucket string) (*s3cli.BucketPolicy, error) {
-				return nil, awserr.New("NoSuchBucketPolicy", "no existing policy", nil)
+				return nil, awserr.New("NoSuchBucketPolicy", "no existing policy", nil /* origErr */)
 			},
 			PutBucketPolicyFunc: func(bucket string, policy s3cli.BucketPolicy) (*s3.PutBucketPolicyOutput, error) {
 				return &s3.PutBucketPolicyOutput{}, nil
@@ -213,7 +213,7 @@ func TestDriverGrantBucketAccess(t *testing.T) {
 	t.Run("TestDriverGrantBucketAccess_GetPolicyError", func(t *testing.T) {
 		mockS3 := mocks.MockProvisionerS3{
 			GetBucketPolicyFunc: func(bucket string) (*s3cli.BucketPolicy, error) {
-				return nil, awserr.New("UnknownError", "some s3 error", nil)
+				return nil, awserr.New("UnknownError", "some s3 error", nil /* origErr */)
 			},
 		}
 
@@ -235,7 +235,7 @@ func TestDriverGrantBucketAccess(t *testing.T) {
 	t.Run("TestDriverGrantBucketAccess_PutPolicyError", func(t *testing.T) {
 		mockS3 := mocks.MockProvisionerS3{
 			GetBucketPolicyFunc: func(bucket string) (*s3cli.BucketPolicy, error) {
-				return nil, awserr.New("NoSuchBucketPolicy", "no policy", nil)
+				return nil, awserr.New("NoSuchBucketPolicy", "no policy", nil /* origErr */)
 			},
 			PutBucketPolicyFunc: func(bucket string, policy s3cli.BucketPolicy) (*s3.PutBucketPolicyOutput, error) {
 				return nil, fmt.Errorf("put policy failed")
@@ -280,9 +280,9 @@ func TestDriverRevokeBucketAccess(t *testing.T) {
 			PutBucketPolicyFunc: func(bucket string, policy s3cli.BucketPolicy) (*s3.PutBucketPolicyOutput, error) {
 				return &s3.PutBucketPolicyOutput{}, nil
 			},
-		}	
+		}
 		server := &driver.ProvisionerServer{
-			S3Client: mockS3,
+			S3Client:      mockS3,
 			NtnxIamClient: mockIAM,
 		}
 		req := &cosi.DriverRevokeBucketAccessRequest{AccountId: "user-uuid"}
@@ -313,7 +313,7 @@ func TestDriverRevokeBucketAccess(t *testing.T) {
 			},
 		}
 		server := &driver.ProvisionerServer{
-			S3Client: mockS3,
+			S3Client:      mockS3,
 			NtnxIamClient: mockIAM,
 		}
 		req := &cosi.DriverRevokeBucketAccessRequest{AccountId: "user-uuid"}
@@ -331,11 +331,11 @@ func TestDriverRevokeBucketAccess(t *testing.T) {
 		}
 		mockS3 := mocks.MockProvisionerS3{
 			GetBucketPolicyFunc: func(bucket string) (*s3cli.BucketPolicy, error) {
-				return nil, awserr.New("UnknownError", "some s3 error", nil)
+				return nil, awserr.New("UnknownError", "some s3 error", nil /* origErr */)
 			},
 		}
 		server := &driver.ProvisionerServer{
-			S3Client: mockS3,
+			S3Client:      mockS3,
 			NtnxIamClient: mockIAM,
 		}
 		req := &cosi.DriverRevokeBucketAccessRequest{AccountId: "user-uuid"}
@@ -344,7 +344,7 @@ func TestDriverRevokeBucketAccess(t *testing.T) {
 		assert.Contains(t, err.Error(), "failed to get policy")
 		assert.Nil(t, resp)
 	})
-	
+
 	t.Run("TestDriverRevokeBucketAccess_PutPolicyError", func(t *testing.T) {
 		mockIAM := mocks.MockIAM{
 			RemoveUserFunc: func(ctx context.Context, uuid string) error {
@@ -354,23 +354,23 @@ func TestDriverRevokeBucketAccess(t *testing.T) {
 		mockS3 := mocks.MockProvisionerS3{
 			GetBucketPolicyFunc: func(bucket string) (*s3cli.BucketPolicy, error) {
 				statement1 := *s3cli.NewPolicyStatement().
-				WithSID("user-uuid-1").
-				ForPrincipals("user-uuid").
-				ForResources("bucket-test").
-				ForSubResources("bucket-test").
-				Allows().
-				Actions("s3:GetObject")
+					WithSID("user-uuid-1").
+					ForPrincipals("user-uuid").
+					ForResources("bucket-test").
+					ForSubResources("bucket-test").
+					Allows().
+					Actions("s3:GetObject")
 
 				statement2 := *s3cli.NewPolicyStatement().
-				WithSID("user-uuid-2").
-				ForPrincipals("user-uuid").
-				ForResources("bucket-test").
-				ForSubResources("bucket-test").
-				Allows().
-				Actions("s3:GetObject")
+					WithSID("user-uuid-2").
+					ForPrincipals("user-uuid").
+					ForResources("bucket-test").
+					ForSubResources("bucket-test").
+					Allows().
+					Actions("s3:GetObject")
 
 				policy := s3cli.NewBucketPolicy(statement1, statement2)
-				
+
 				return policy, nil
 			},
 			PutBucketPolicyFunc: func(bucket string, policy s3cli.BucketPolicy) (*s3.PutBucketPolicyOutput, error) {
@@ -378,7 +378,7 @@ func TestDriverRevokeBucketAccess(t *testing.T) {
 			},
 		}
 		server := &driver.ProvisionerServer{
-			S3Client: mockS3,
+			S3Client:      mockS3,
 			NtnxIamClient: mockIAM,
 		}
 		req := &cosi.DriverRevokeBucketAccessRequest{AccountId: "user-uuid-1"}
@@ -410,7 +410,7 @@ func TestDriverRevokeBucketAccess(t *testing.T) {
 			},
 		}
 		server := &driver.ProvisionerServer{
-			S3Client: mockS3,
+			S3Client:      mockS3,
 			NtnxIamClient: mockIAM,
 		}
 		req := &cosi.DriverRevokeBucketAccessRequest{AccountId: "fake-user-uuid"}
