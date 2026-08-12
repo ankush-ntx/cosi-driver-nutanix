@@ -129,10 +129,10 @@ func (api *API) fetchETag(ctx context.Context, url string) (string, bool, error)
 		return "", false, fmt.Errorf("%w", err)
 	}
 
-	if resp.StatusCode == 404 {
+	if resp.StatusCode == http.StatusNotFound {
 		return "", false, nil
 	}
-	if resp.StatusCode != 200 {
+	if resp.StatusCode != http.StatusOK {
 		return "", false, fmt.Errorf("non-200 response: %d - %s", resp.StatusCode, decodeError(body))
 	}
 
@@ -201,7 +201,7 @@ func (api *API) findUserByUsername(ctx context.Context, username string) (string
 		return "", false, fmt.Errorf("%w", err)
 	}
 
-	if resp.StatusCode != 200 {
+	if resp.StatusCode != http.StatusOK {
 		return "", false, fmt.Errorf("non-200 response: %d - %s", resp.StatusCode, decodeError(body))
 	}
 
@@ -301,7 +301,7 @@ func (api *API) createIAMUser(ctx context.Context, username, displayName string)
 		return "", fmt.Errorf("%w", err)
 	}
 
-	if resp.StatusCode != 201 {
+	if resp.StatusCode != http.StatusCreated {
 		return "", fmt.Errorf("non-201 response: %d - %s", resp.StatusCode, decodeError(respBody))
 	}
 
@@ -346,7 +346,7 @@ func (api *API) createAccessKey(ctx context.Context, extID, username string) (Ke
 		return result, fmt.Errorf("%w", err)
 	}
 
-	if resp.StatusCode != 201 {
+	if resp.StatusCode != http.StatusCreated {
 		return result, fmt.Errorf("non-201 response: %d - %s", resp.StatusCode, decodeError(respBody))
 	}
 
@@ -378,7 +378,7 @@ func (api *API) listAccessKeys(ctx context.Context, extID string) ([]KeyData, er
 		return nil, fmt.Errorf("%w", err)
 	}
 
-	if resp.StatusCode != 200 {
+	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("non-200 response: %d - %s", resp.StatusCode, decodeError(body))
 	}
 
@@ -420,10 +420,10 @@ func (api *API) deleteAccessKey(ctx context.Context, extID, keyExtID string) err
 		return fmt.Errorf("%w", err)
 	}
 
-	if resp.StatusCode == 404 {
+	if resp.StatusCode == http.StatusNotFound {
 		return nil
 	}
-	if resp.StatusCode != 204 {
+	if resp.StatusCode != http.StatusNoContent {
 		return fmt.Errorf("non-204 response: %d - %s", resp.StatusCode, decodeError(body))
 	}
 	return nil
@@ -479,10 +479,10 @@ func (api *API) RemoveUser(ctx context.Context, uuid string) error {
 		return fmt.Errorf("%w", err)
 	}
 
-	if resp.StatusCode == 404 {
+	if resp.StatusCode == http.StatusNotFound {
 		return nil
 	}
-	if resp.StatusCode != 204 {
+	if resp.StatusCode != http.StatusNoContent {
 		return fmt.Errorf("non-204 response: %d - %s", resp.StatusCode, decodeError(body))
 	}
 	return nil

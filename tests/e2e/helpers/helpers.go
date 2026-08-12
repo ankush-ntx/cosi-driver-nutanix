@@ -312,9 +312,9 @@ func checkUserExistsUtil(ctx context.Context, api *admin.API, uuid string) (bool
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode == 404 {
+	if resp.StatusCode == http.StatusNotFound {
 		return false, nil
-	} else if resp.StatusCode == 200 {
+	} else if resp.StatusCode == http.StatusOK {
 		return true, nil
 	} else {
 		return false, fmt.Errorf("non-200 response: %d", resp.StatusCode)
@@ -394,7 +394,7 @@ func GetNumOfUsersInObjectstore(ctx context.Context, api *admin.API) (int, error
 		return -1, err
 	}
 
-	if resp.StatusCode != 200 {
+	if resp.StatusCode != http.StatusOK {
 		return -1, fmt.Errorf("non-200 response: %d - %s", resp.StatusCode, string(decodedResponse))
 	}
 
